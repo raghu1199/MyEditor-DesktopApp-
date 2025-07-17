@@ -142,4 +142,5 @@ view submission by teacher
 test 34
 login/signup works perfect
 view submission only visible to teachers 
+paste is disabled in code area for student login
 
