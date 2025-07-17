@@ -15,6 +15,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from datetime import datetime
 import requests  # Make sure you have: pip install requests
+import tkinter.messagebox as messagebox  
 
 print("This Python:", sys.executable)
 
@@ -538,6 +539,16 @@ class CodeEditorApp:
 
         text.focus_set()  # One-time only.
         text.bind("<Button-1>", lambda e: text.focus_set()) 
+        
+        if hasattr(self, 'current_user_role') and self.current_user_role.lower() == "student":
+            def block_paste(e):
+                messagebox.showwarning(
+                    "Paste Blocked",
+                    "Pasting is disabled for students. Please type your code manually."
+                )
+                return "break"
+
+            text.bind("<<Paste>>", block_paste)
 
         self.notebook.add(frame, text=name)
         self.open_tabs[frame] = {'text': text, 'lines': line_numbers, 'path': path}
