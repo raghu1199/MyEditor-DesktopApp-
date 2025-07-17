@@ -136,6 +136,10 @@ Here are some popular next steps if you want to evolve it:
 
 
 test33
-upload by student on firebase
+upload file by student on firebase
 view submission by teacher
+
+test 34
+login/signup works perfect
+view submission only visible to teachers 
 
