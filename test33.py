@@ -926,25 +926,101 @@ class CodeEditorApp:
     def save_file(self):
         tab = self.get_current_tab()
         if not tab:
+            self.output.insert(tk.END, "[INFO] No file is open to save.\n")
             return
+
+        content = tab['text'].get('1.0', tk.END).rstrip()
 
         if not tab['path']:
             path = filedialog.asksaveasfilename(defaultextension=".py")
             if not path:
+                self.output.insert(tk.END, "[INFO] Save cancelled (no filename chosen).\n")
                 return
             tab['path'] = path
             self.notebook.tab(self.notebook.select(), text=os.path.basename(path))
 
-        content = tab['text'].get('1.0', tk.END)
-
-        with open(tab['path'], 'w') as f:
+        with open(tab['path'], 'w', encoding='utf-8') as f:
             f.write(content)
 
+        # Optional: record the save as a user action only if not already logged
         self.user_actions.append({
-            'action': 'save',
-            'file': tab['path'],
+            'action': 'save_file',
+            'file': os.path.basename(tab['path']),
             'content': content
         })
+
+        self.output.insert(tk.END, f"[DEBUG] Saved file: {tab['path']}\n")
+
+
+    def export_report(self):
+        # If there is an open tab, auto-save its latest content first
+        tab = self.get_current_tab()
+        if tab:
+            current_content = tab['text'].get('1.0', tk.END).rstrip()
+
+            # Save only if:
+            # 1️⃣ File is new (no path)
+            # 2️⃣ Or its content changed (optional, for simplicity we always save)
+            if not tab['path']:
+                path = filedialog.asksaveasfilename(defaultextension=".py")
+                if not path:
+                    self.output.insert(tk.END, "[INFO] Export cancelled (no filename chosen).\n")
+                    return
+                tab['path'] = path
+                self.notebook.tab(self.notebook.select(), text=os.path.basename(path))
+
+            # Save file physically
+            with open(tab['path'], 'w', encoding='utf-8') as f:
+                f.write(current_content)
+
+            # Log action (if this save not already logged)
+            self.user_actions.append({
+                'action': 'save_file',
+                'file': os.path.basename(tab['path']),
+                'content': current_content
+            })
+
+            self.output.insert(tk.END, f"[DEBUG] Auto-saved current file: {tab['path']}\n")
+        else:
+            self.output.insert(tk.END, "[INFO] No active file to auto-save.\n")
+
+        # Now create PDF report
+        if not self.user_actions:
+            self.output.insert(tk.END, "[DEBUG] No actions to export.\n")
+            return
+
+        filename = f"{self.current_user}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        pdf = canvas.Canvas(filename, pagesize=letter)
+        width, height = letter
+
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(50, height - 50, f"Code Session Report - {self.current_user}")
+        pdf.setFont("Helvetica", 12)
+        pdf.drawString(50, height - 70, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+        y = height - 100
+
+        for action in self.user_actions:
+            if action['action'] == 'save_file':
+                pdf.setFont("Helvetica-Bold", 12)
+                pdf.drawString(50, y, f"File: {action['file']}")
+                y -= 15
+
+                pdf.setFont("Courier", 10)
+                for line in action['content'].splitlines():
+                    pdf.drawString(60, y, line)
+                    y -= 12
+                    if y < 50:
+                        pdf.showPage()
+                        pdf.setFont("Helvetica-Bold", 12)
+                        y = height - 50
+
+                y -= 20  # Extra gap after each file
+
+        pdf.save()
+        self.output.insert(tk.END, f"[DEBUG] Report saved as {filename}\n")
+        
+
 
     def get_current_tab(self):
         selected_tab_id = self.notebook.select()
@@ -1030,31 +1106,7 @@ class CodeEditorApp:
             outputs += f"[DEBUG] Exception occurred:\n{str(e)}\n"
             self.output.insert(tk.END, outputs)
 
-    def export_report(self):
-        if not self.user_actions:
-            self.output.insert(tk.END, "[DEBUG] No actions to export.\n")
-            return
-
-        filename = f"{self.current_user}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        pdf = canvas.Canvas(filename, pagesize=letter)
-        width, height = letter
-
-        pdf.setFont("Helvetica", 12)
-        pdf.drawString(50, height - 50, f"User Report - {self.current_user}")
-        pdf.drawString(50, height - 70, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-        y = height - 100
-        for action in self.user_actions:
-            text = f"{action['action']} | {action['file']}"
-            pdf.drawString(50, y, text)
-            y -= 15
-            if y < 50:
-                pdf.showPage()
-                pdf.setFont("Helvetica", 12)
-                y = height - 50
-
-        pdf.save()
-        self.output.insert(tk.END, f"[DEBUG] Report saved as {filename}\n")
+    
 
     def global_click_handler(self, event):
         widget = event.widget
@@ -1167,10 +1219,12 @@ class CodeEditorApp:
 
    
 
+        
+
     def view_submissions(self):
         popup = ctk.CTkToplevel(self.root)
         popup.title("View Submissions")
-        popup.geometry("500x600")
+        popup.geometry("600x600")
         popup.configure(fg_color="#333333")
 
         ctk.CTkLabel(
@@ -1181,7 +1235,6 @@ class CodeEditorApp:
 
         font_label = ("Helvetica", 12)
 
-        # Input fields
         labels = ["College:", "Faculty:", "Subject:", "Class:"]
         entries = []
         for label in labels:
@@ -1222,7 +1275,7 @@ class CodeEditorApp:
                         text_color="#61dafb"
                     ).pack(pady=20)
 
-                    # ✅ Scrollable frame
+                    # ✅ Modern Scrollable container
                     result_frame = ctk.CTkScrollableFrame(sub_popup, fg_color="#222222", width=550, height=450)
                     result_frame.pack(padx=20, pady=10, fill='both', expand=True)
 
@@ -1232,34 +1285,40 @@ class CodeEditorApp:
                     else:
                         for report in reports:
                             pdf_name = report.get('pdf_name', 'Unknown')
-                            storage_path = report.get('storage_path', 'No storage_path')
                             download_url = report.get('download_url', None)
 
-                            # ✅ Display PDF name highlighted
-                            ctk.CTkLabel(result_frame,
-                                        text=f"{pdf_name}",
-                                        font=("Helvetica", 12, "bold"),
-                                        text_color="#61dafb").pack(anchor="w", padx=10, pady=(10, 2))
+                            # ✅ Card style frame for each report
+                            card = ctk.CTkFrame(result_frame, fg_color="#2a2a2a", corner_radius=10)
+                            card.pack(fill="x", padx=10, pady=8)
 
-                            # ✅ Display storage path (optional)
-                            ctk.CTkLabel(result_frame,
-                                        text=f"Path: {storage_path}",
-                                        font=("Helvetica", 10),
-                                        text_color="#ffffff").pack(anchor="w", padx=10, pady=(0, 5))
+                            # ✅ Row: name + download button
+                            row_frame = ctk.CTkFrame(card, fg_color="transparent")
+                            row_frame.pack(fill="x", padx=10, pady=10)
+
+                            name_label = ctk.CTkLabel(
+                                row_frame,
+                                text=pdf_name,
+                                font=("Helvetica", 13, "bold"),
+                                text_color="#61dafb"
+                            )
+                            name_label.pack(side="left")
 
                             if download_url:
-                                def make_open(url):  # Required to bind correct URL in loop
+                                def make_open(url):
                                     return lambda: webbrowser.open_new(url)
 
-                                download_button = ctk.CTkButton(result_frame,
-                                                                text="Download",
-                                                                corner_radius=10,
-                                                                fg_color="#61dafb",
-                                                                text_color="#000000",
-                                                                hover_color="#21a1f1",
-                                                                font=("Helvetica", 10, "bold"),
-                                                                command=make_open(download_url))
-                                download_button.pack(anchor="w", padx=10, pady=(0, 10))
+                                download_button = ctk.CTkButton(
+                                    row_frame,
+                                    text="Download",
+                                    corner_radius=15,
+                                    fg_color="#61dafb",
+                                    text_color="#000000",
+                                    hover_color="#21a1f1",
+                                    font=("Helvetica", 11, "bold"),
+                                    width=100,
+                                    command=make_open(download_url)
+                                )
+                                download_button.pack(side="right")
 
                     sub_popup.transient(self.root)
                     sub_popup.grab_set()
@@ -1286,7 +1345,6 @@ class CodeEditorApp:
         popup.grab_set()
         self.root.wait_window(popup)
 
-                    
 
 
         
