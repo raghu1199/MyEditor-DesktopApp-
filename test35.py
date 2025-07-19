@@ -424,6 +424,7 @@ class CodeEditorApp:
         self.current_user = "Anonymous"
         self.current_user_role = "Anonymous"
         self.user_actions = []
+        self.current_user_institute=None
         
         if self.editor_frame:
             self.editor_frame.destroy()
@@ -614,14 +615,11 @@ class CodeEditorApp:
 
 
     def export_report(self):
-        # If there is an open tab, auto-save its latest content first
+        # ✅ Always auto-save the current tab if any
         tab = self.get_current_tab()
         if tab:
             current_content = tab['text'].get('1.0', tk.END).rstrip()
 
-            # Save only if:
-            # 1️⃣ File is new (no path)
-            # 2️⃣ Or its content changed (optional, for simplicity we always save)
             if not tab['path']:
                 path = filedialog.asksaveasfilename(defaultextension=".py")
                 if not path:
@@ -630,11 +628,9 @@ class CodeEditorApp:
                 tab['path'] = path
                 self.notebook.tab(self.notebook.select(), text=os.path.basename(path))
 
-            # Save file physically
             with open(tab['path'], 'w', encoding='utf-8') as f:
                 f.write(current_content)
 
-            # Log action (if this save not already logged)
             self.user_actions.append({
                 'action': 'save_file',
                 'file': os.path.basename(tab['path']),
@@ -645,11 +641,7 @@ class CodeEditorApp:
         else:
             self.output.insert(tk.END, "[INFO] No active file to auto-save.\n")
 
-        # Now create PDF report
-        if not self.user_actions:
-            self.output.insert(tk.END, "[DEBUG] No actions to export.\n")
-            return
-
+        # ✅ PDF file name
         filename = f"{self.current_user}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         pdf = canvas.Canvas(filename, pagesize=letter)
         width, height = letter
@@ -661,26 +653,101 @@ class CodeEditorApp:
 
         y = height - 100
 
-        for action in self.user_actions:
-            if action['action'] == 'save_file':
-                pdf.setFont("Helvetica-Bold", 12)
-                pdf.drawString(50, y, f"File: {action['file']}")
-                y -= 15
+        folder = self.current_folder or os.getcwd()
 
-                pdf.setFont("Courier", 10)
-                for line in action['content'].splitlines():
-                    pdf.drawString(60, y, line)
+        # ✅ 1️⃣ Add Question section
+        question_path = os.path.join(folder, "question.txt")
+        if os.path.exists(question_path):
+            pdf.setFont("Helvetica-Bold", 12)
+            pdf.drawString(50, y, "QUESTION")
+            y -= 20
+
+            pdf.setFont("Courier", 10)
+            with open(question_path, 'r',encoding="utf-8") as f:
+                for line in f:
+                    pdf.drawString(60, y, line.rstrip())
                     y -= 12
                     if y < 50:
                         pdf.showPage()
-                        pdf.setFont("Helvetica-Bold", 12)
                         y = height - 50
 
-                y -= 20  # Extra gap after each file
+            y -= 20
+
+        # ✅ 2️⃣ Add Algorithm section
+        algo_path = os.path.join(folder, "algorithm.txt")
+        if os.path.exists(algo_path):
+            pdf.setFont("Helvetica-Bold", 12)
+            pdf.drawString(50, y, "ALGORITHM")
+            y -= 20
+
+            pdf.setFont("Courier", 10)
+            with open(algo_path, 'r',encoding="utf-8") as f:
+                for line in f:
+                    pdf.drawString(60, y, line.rstrip())
+                    y -= 12
+                    if y < 50:
+                        pdf.showPage()
+                        y = height - 50
+
+            y -= 20
+
+        # ✅ 3️⃣ Add Solutions section
+        # ✅ 3️⃣ Add Solutions section (ONLY opened files from tree)
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(50, y, "SOLUTIONS")
+        y -= 20
+
+        solution_exts = ['.py', '.c', '.cpp', '.sql']
+
+        # Loop through files visible in the tree
+        opened_files = []
+        # If you have an 'opened_files_node' parent node:
+        if hasattr(self, 'opened_files_node'):
+            for child in self.tree.get_children(self.opened_files_node):
+                path = self.tree.item(child, 'values')[0]
+                if path and os.path.isfile(path):
+                    ext = os.path.splitext(path)[1].lower()
+                    if ext in solution_exts:
+                        opened_files.append(path)
+
+        # ✅ For each opened file, write content
+        for file_path in opened_files:
+            file_name = os.path.basename(file_path)
+            pdf.setFont("Helvetica-Bold", 11)
+            pdf.drawString(50, y, f"File: {file_name}")
+            y -= 15
+
+            pdf.setFont("Courier", 10)
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    pdf.drawString(60, y, line.rstrip())
+                    y -= 12
+                    if y < 50:
+                        pdf.showPage()
+                        y = height - 50
+
+            y -= 20
+
+
+        # ✅ 4️⃣ Add Program Output section
+        output_content = self.output.get('1.0', tk.END).strip()
+        if output_content:
+            pdf.setFont("Helvetica-Bold", 12)
+            pdf.drawString(50, y, "PROGRAM OUTPUT")
+            y -= 20
+
+            pdf.setFont("Courier", 10)
+            for line in output_content.splitlines():
+                pdf.drawString(60, y, line.rstrip())
+                y -= 12
+                if y < 50:
+                    pdf.showPage()
+                    y = height - 50
 
         pdf.save()
         self.output.insert(tk.END, f"[DEBUG] Report saved as {filename}\n")
-        
+
+
 
 
     def get_current_tab(self):
@@ -1189,29 +1256,42 @@ class CodeEditorApp:
 
 
     def post_question(self):
-        popup = tk.Toplevel(self.root)
+        popup = ctk.CTkToplevel(self.root)
         popup.title("Post Question")
-        popup.geometry("400x300")
+        popup.geometry("500x400")
+        popup.configure(fg_color="#333333")
 
-        tk.Label(popup, text="Faculty:").pack()
-        faculty_entry = tk.Entry(popup, width=40)
-        faculty_entry.pack(pady=5)
+        ctk.CTkLabel(
+            popup, text="Post Question",
+            font=("Helvetica", 20, "bold"),
+            text_color="#61dafb"
+        ).pack(pady=20)
 
-        tk.Label(popup, text="Subject:").pack()
-        subject_entry = tk.Entry(popup, width=40)
-        subject_entry.pack(pady=5)
+        font_label = ("Helvetica", 12)
 
-        tk.Label(popup, text="Question:").pack()
-        question_text = tk.Text(popup, height=5, width=40)
-        question_text.pack(pady=5)
+        labels = ["Faculty:", "Subject:"]
+        entries = []
+        for label in labels:
+            ctk.CTkLabel(popup, text=label, font=font_label, text_color="#ffffff").pack(anchor="w", padx=40)
+            entry = ctk.CTkEntry(popup, width=300, height=40, corner_radius=10)
+            entry.pack(pady=5)
+            entries.append(entry)
+
+        ctk.CTkLabel(popup, text="Question:", font=font_label, text_color="#ffffff").pack(anchor="w", padx=40)
+        question_text = ctk.CTkTextbox(popup, width=400, height=100, corner_radius=10)
+        question_text.pack(pady=10)
 
         def submit():
-            faculty = faculty_entry.get().strip()
-            subject = subject_entry.get().strip()
+            faculty, subject = [e.get().strip() for e in entries]
             question = question_text.get("1.0", "end").strip()
+            institute = getattr(self, 'current_user_institute', '').strip()
+
+            if not all([faculty, subject, question, institute]):
+                self.output.insert(tk.END, "[ERROR] Please fill all fields.\n")
+                return
 
             payload = {
-                "institute": self.current_user_institute,
+                "institute": institute,
                 "faculty": faculty,
                 "subject": subject,
                 "question": question
@@ -1219,34 +1299,60 @@ class CodeEditorApp:
 
             response = requests.post("http://localhost:5000/post_question", json=payload)
             if response.status_code == 200:
-                messagebox.showinfo("Success", "Question posted.")
+                messagebox.showinfo("Success", "Question posted successfully.")
                 popup.destroy()
             else:
-                messagebox.showerror("Error", response.json().get("error", "Unknown error."))
+                self.output.insert(tk.END, f"[ERROR] {response.text}\n")
 
-        tk.Button(popup, text="Post", command=submit).pack(pady=10)
+        ctk.CTkButton(
+            popup, text="Post Question",
+            corner_radius=20,
+            width=200,
+            height=40,
+            fg_color="#61dafb",
+            text_color="#282c34",
+            hover_color="#21a1f1",
+            font=("Helvetica", 14, "bold"),
+            command=submit
+        ).pack(pady=20)
 
+        popup.transient(self.root)
+        popup.grab_set()
+        self.root.wait_window(popup)
 
-
+    
     def get_question(self):
-        popup = tk.Toplevel(self.root)
+        popup = ctk.CTkToplevel(self.root)
         popup.title("Get Question")
-        popup.geometry("300x200")
+        popup.geometry("400x300")
+        popup.configure(fg_color="#333333")
 
-        tk.Label(popup, text="Faculty:").pack()
-        faculty_entry = tk.Entry(popup, width=40)
-        faculty_entry.pack(pady=5)
+        ctk.CTkLabel(
+            popup, text="Get Question",
+            font=("Helvetica", 20, "bold"),
+            text_color="#61dafb"
+        ).pack(pady=20)
 
-        tk.Label(popup, text="Subject:").pack()
-        subject_entry = tk.Entry(popup, width=40)
-        subject_entry.pack(pady=5)
+        font_label = ("Helvetica", 12)
+
+        labels = ["Faculty:", "Subject:"]
+        entries = []
+        for label in labels:
+            ctk.CTkLabel(popup, text=label, font=font_label, text_color="#ffffff").pack(anchor="w", padx=40)
+            entry = ctk.CTkEntry(popup, width=300, height=40, corner_radius=10)
+            entry.pack(pady=5)
+            entries.append(entry)
 
         def fetch():
-            faculty = faculty_entry.get().strip()
-            subject = subject_entry.get().strip()
+            faculty, subject = [e.get().strip() for e in entries]
+            institute = getattr(self, 'current_user_institute', '').strip()
+
+            if not all([faculty, subject, institute]):
+                self.output.insert(tk.END, "[ERROR] Please fill all fields.\n")
+                return
 
             params = {
-                "institute": self.current_user_institute,
+                "institute": institute,
                 "faculty": faculty,
                 "subject": subject
             }
@@ -1254,19 +1360,44 @@ class CodeEditorApp:
             response = requests.get("http://localhost:5000/get_question", params=params)
             if response.status_code == 200:
                 question = response.json().get("question", "")
-                file_path = os.path.join(self.current_folder or os.getcwd(), "question.txt")
-                with open(file_path, "w") as f:
+                folder = self.current_folder or os.getcwd()
+
+                # ✅ Save question.txt
+                question_path = os.path.join(folder, "question.txt")
+                with open(question_path, "w") as f:
                     f.write(question)
 
-                self.add_file_to_treeview(file_path)
-                self.load_file(file_path)
-                messagebox.showinfo("Success", "Question saved to question.txt")
+                self.add_file_to_treeview(question_path)
+                self.load_file(question_path)
+
+                # ✅ Also create empty algorithm.txt
+                algo_path = os.path.join(folder, "algorithm.txt")
+                with open(algo_path, "w") as f:
+                    f.write("")  # empty for now
+
+                self.add_file_to_treeview(algo_path)
+                self.load_file(algo_path)
+
+                messagebox.showinfo("Success", "Question saved to question.txt and empty algorithm.txt created.")
                 popup.destroy()
             else:
-                messagebox.showerror("Error", response.json().get("error", "Could not get question."))
+                self.output.insert(tk.END, f"[ERROR] {response.text}\n")
 
-        tk.Button(popup, text="Fetch", command=fetch).pack(pady=10)
-    
+        ctk.CTkButton(
+            popup, text="Fetch Question",
+            corner_radius=20,
+            width=200,
+            height=40,
+            fg_color="#61dafb",
+            text_color="#282c34",
+            hover_color="#21a1f1",
+            font=("Helvetica", 14, "bold"),
+            command=fetch
+        ).pack(pady=20)
+
+        popup.transient(self.root)
+        popup.grab_set()
+        self.root.wait_window(popup)
 
 
 
