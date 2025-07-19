@@ -17,6 +17,7 @@ from datetime import datetime
 import requests  # Make sure you have: pip install requests
 import tkinter.messagebox as messagebox  
 import webbrowser
+from functools import partial
 
 print("This Python:", sys.executable)
 
@@ -35,6 +36,7 @@ class CodeEditorApp:
         self.welcome_frame=None
         self.current_user = "Anonymous"
         self.current_user_role = "Anonymous"
+        self.current_user_institute=None
         self.user_actions = []
 
         self.welcome_frame = None
@@ -177,6 +179,7 @@ class CodeEditorApp:
                 res = requests.post("http://localhost:5000/login", json=payload)
                 if res.ok:
                     self.current_user = name
+                    self.current_user_institute=institute
                     self.start_editor()
                 else:
                     error = res.json().get("error", "Login failed")
@@ -337,10 +340,15 @@ class CodeEditorApp:
         if hasattr(self, 'current_user_role') and self.current_user_role.lower() == "teacher":
             self.create_top_button(top_bar, "View Submissions", self.view_submissions)
 
-        
-        
+        elif hasattr(self, 'current_user_role') and self.current_user_role.lower() == "student":
+            self.create_top_button(top_bar, "My Submissions", self.view_my_submissions)
 
-
+        if hasattr(self, 'current_user_role') and self.current_user_role.lower() == "student":
+            self.create_top_button(top_bar, "Get Question", self.get_question)
+        elif hasattr(self, 'current_user_role') and self.current_user_role.lower() == "teacher":
+            self.create_top_button(top_bar, "Post Question", self.post_question)
+    
+    
 
         # Welcome label at right
         self.user_label = tk.Label(top_bar,
@@ -409,8 +417,27 @@ class CodeEditorApp:
             self.file_menu.lift()
 
     def logout(self):
-        self.root.destroy()
-        os.execl(sys.executable, sys.executable, *sys.argv)
+        # Destroy only the editor UI
+        self.open_tabs = {}
+        self.current_folder = None
+        self.welcome_frame=None
+        self.current_user = "Anonymous"
+        self.current_user_role = "Anonymous"
+        self.user_actions = []
+        
+        if self.editor_frame:
+            self.editor_frame.destroy()
+        elif self.h_paned:
+            self.h_paned.destroy()
+        
+        # Clean ALL widgets
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+
+        # Re-create the welcome frame
+        self.show_welcome_page()
+
 
     # Add your unchanged code: new_file, open_file, save_file, open_folder,
     # populate_tree, open_selected_file, create_tab, get_current_tab,
@@ -817,7 +844,7 @@ class CodeEditorApp:
                 self.output.insert(tk.END, "[ERROR] Please fill all fields.\n")
                 return
 
-            import requests
+           
             with open(pdf_filename, 'rb') as f:
                 files = {'file': f}
                 data = {
@@ -825,8 +852,10 @@ class CodeEditorApp:
                     'faculty': faculty,
                     'subject': subject,
                     'class': class_name,
-                    'pdf_name': self.current_user  # or pdf_name logic you want
+                    'pdf_name': self.current_user,  # or pdf_name logic you want
+                    'student_name':self.current_user
                 }
+                print("upload data:",data)
                 try:
                     res = requests.post("http://localhost:5000/upload-report",
                                         files=files, data=data)
@@ -992,7 +1021,253 @@ class CodeEditorApp:
         popup.grab_set()
         self.root.wait_window(popup)
 
-        
+    
+    
+
+
+    def view_my_submissions(self):
+        popup = ctk.CTkToplevel(self.root)
+        popup.title("View My Submissions")
+        popup.geometry("600x400")
+        popup.configure(fg_color="#333333")
+
+        ctk.CTkLabel(
+            popup, text="View My Submissions",
+            font=("Helvetica", 20, "bold"),
+            text_color="#61dafb"
+        ).pack(pady=20)
+
+        font_label = ("Helvetica", 12)
+
+        labels = ["College:", "Faculty:", "Subject:"]
+        entries = []
+        for label in labels:
+            ctk.CTkLabel(popup, text=label, font=font_label, text_color="#ffffff").pack(anchor="w", padx=40)
+            entry = ctk.CTkEntry(popup, width=300, height=40, corner_radius=10)
+            entry.pack(pady=5)
+            entries.append(entry)
+
+        def load_my_submissions():
+            college, faculty, subject = [e.get().strip() for e in entries]
+            student_name = self.current_user
+
+            if not all([college, faculty, subject, student_name]):
+                self.output.insert(tk.END, "[ERROR] Please fill all fields.\n")
+                return
+
+            try:
+                url = f"http://localhost:5000/get-my-reports"
+                params = {
+                    'college': college,
+                    'faculty': faculty,
+                    'subject': subject,
+                    'student_name': student_name
+                }
+                res = requests.get(url, params=params)
+                if res.ok:
+                    reports = res.json().get('reports', [])
+
+                    popup.destroy()
+
+                    title = f"{subject}_Reports"
+                    sub_popup = ctk.CTkToplevel(self.root)
+                    sub_popup.title(title)
+                    sub_popup.geometry("600x600")
+                    sub_popup.configure(fg_color="#333333")
+
+                    ctk.CTkLabel(
+                        sub_popup, text=f"My Reports for {subject}",
+                        font=("Helvetica", 18, "bold"),
+                        text_color="#61dafb"
+                    ).pack(pady=20)
+
+                    result_frame = ctk.CTkScrollableFrame(sub_popup, fg_color="#222222", width=550, height=400)
+                    result_frame.pack(padx=20, pady=10, fill='both', expand=True)
+
+                    if not reports:
+                        ctk.CTkLabel(result_frame, text="No reports found.",
+                                    font=font_label, text_color="#ffffff").pack()
+                    else:
+                        # ✅ define once OUTSIDE loop
+                        def generate_signed_url_and_open(path):
+                            payload = {"storage_path": path}
+                            url = "http://localhost:5000/get-signed-url"
+                            res = requests.post(url, json=payload)
+                            if res.ok:
+                                download_url = res.json().get("signed_url")
+                                if download_url:
+                                    webbrowser.open_new(download_url)
+                            else:
+                                self.output.insert(tk.END, f"[ERROR] {res.text}\n")
+
+                        for report in reports:
+                            pdf_name = report.get('pdf_name', 'Unknown')
+                            storage_path = report.get('storage_path')
+
+                            card = ctk.CTkFrame(result_frame, fg_color="#2a2a2a", corner_radius=10)
+                            card.pack(fill="x", padx=10, pady=8)
+
+                            row_frame = ctk.CTkFrame(card, fg_color="transparent")
+                            row_frame.pack(fill="x", padx=10, pady=10)
+
+                            name_label = ctk.CTkLabel(
+                                row_frame,
+                                text=pdf_name,
+                                font=("Helvetica", 13, "bold"),
+                                text_color="#61dafb"
+                            )
+                            name_label.pack(side="left")
+
+                            download_button = ctk.CTkButton(
+                                row_frame,
+                                text="Download",
+                                corner_radius=15,
+                                fg_color="#61dafb",
+                                text_color="#000000",
+                                hover_color="#21a1f1",
+                                font=("Helvetica", 11, "bold"),
+                                width=100,
+                                command=partial(generate_signed_url_and_open, storage_path)
+                            )
+                            download_button.pack(side="right")
+
+                        def merge_final_report():
+                            storage_paths = [r['storage_path'] for r in reports]
+                            payload = {
+                                "storage_paths": storage_paths,
+                                "output_name": "final_report",
+                                "college": college,
+                                "faculty": faculty,
+                                "subject": subject,
+                                "student_name": student_name
+                            }
+                            res = requests.post("http://localhost:5000/merge-reports", json=payload)
+                            if res.ok:
+                                final_url = res.json().get("signed_url")
+                                if final_url:
+                                    webbrowser.open_new(final_url)
+                            else:
+                                self.output.insert(tk.END, f"[ERROR] {res.text}\n")
+
+                        ctk.CTkButton(
+                            sub_popup,
+                            text="Generate Final Report",
+                            corner_radius=20,
+                            width=200,
+                            height=40,
+                            fg_color="#61dafb",
+                            text_color="#282c34",
+                            hover_color="#21a1f1",
+                            font=("Helvetica", 14, "bold"),
+                            command=merge_final_report
+                        ).pack(pady=20)
+
+                    sub_popup.transient(self.root)
+                    sub_popup.grab_set()
+                    self.root.wait_window(sub_popup)
+
+                else:
+                    self.output.insert(tk.END, f"[ERROR] {res.text}\n")
+            except Exception as e:
+                self.output.insert(tk.END, f"[ERROR] {str(e)}\n")
+
+        ctk.CTkButton(
+            popup, text="Load My Reports",
+            corner_radius=20,
+            width=200,
+            height=40,
+            fg_color="#61dafb",
+            text_color="#282c34",
+            hover_color="#21a1f1",
+            font=("Helvetica", 14, "bold"),
+            command=load_my_submissions
+        ).pack(pady=20)
+
+        popup.transient(self.root)
+        popup.grab_set()
+        self.root.wait_window(popup)
+
+
+    def post_question(self):
+        popup = tk.Toplevel(self.root)
+        popup.title("Post Question")
+        popup.geometry("400x300")
+
+        tk.Label(popup, text="Faculty:").pack()
+        faculty_entry = tk.Entry(popup, width=40)
+        faculty_entry.pack(pady=5)
+
+        tk.Label(popup, text="Subject:").pack()
+        subject_entry = tk.Entry(popup, width=40)
+        subject_entry.pack(pady=5)
+
+        tk.Label(popup, text="Question:").pack()
+        question_text = tk.Text(popup, height=5, width=40)
+        question_text.pack(pady=5)
+
+        def submit():
+            faculty = faculty_entry.get().strip()
+            subject = subject_entry.get().strip()
+            question = question_text.get("1.0", "end").strip()
+
+            payload = {
+                "institute": self.current_user_institute,
+                "faculty": faculty,
+                "subject": subject,
+                "question": question
+            }
+
+            response = requests.post("http://localhost:5000/post_question", json=payload)
+            if response.status_code == 200:
+                messagebox.showinfo("Success", "Question posted.")
+                popup.destroy()
+            else:
+                messagebox.showerror("Error", response.json().get("error", "Unknown error."))
+
+        tk.Button(popup, text="Post", command=submit).pack(pady=10)
+
+
+
+    def get_question(self):
+        popup = tk.Toplevel(self.root)
+        popup.title("Get Question")
+        popup.geometry("300x200")
+
+        tk.Label(popup, text="Faculty:").pack()
+        faculty_entry = tk.Entry(popup, width=40)
+        faculty_entry.pack(pady=5)
+
+        tk.Label(popup, text="Subject:").pack()
+        subject_entry = tk.Entry(popup, width=40)
+        subject_entry.pack(pady=5)
+
+        def fetch():
+            faculty = faculty_entry.get().strip()
+            subject = subject_entry.get().strip()
+
+            params = {
+                "institute": self.current_user_institute,
+                "faculty": faculty,
+                "subject": subject
+            }
+
+            response = requests.get("http://localhost:5000/get_question", params=params)
+            if response.status_code == 200:
+                question = response.json().get("question", "")
+                file_path = os.path.join(self.current_folder or os.getcwd(), "question.txt")
+                with open(file_path, "w") as f:
+                    f.write(question)
+
+                self.add_file_to_treeview(file_path)
+                self.load_file(file_path)
+                messagebox.showinfo("Success", "Question saved to question.txt")
+                popup.destroy()
+            else:
+                messagebox.showerror("Error", response.json().get("error", "Could not get question."))
+
+        tk.Button(popup, text="Fetch", command=fetch).pack(pady=10)
+    
+
 
 
 if __name__ == "__main__":

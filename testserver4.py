@@ -290,5 +290,63 @@ def login():
 
     return jsonify({"message": "Login successful"}), 200
 
+
+# Teacher posts a question
+@app.route("/post_question", methods=["POST"])
+def post_question():
+    data = request.json
+    question = data.get("question")
+    institute = data.get("institute")
+    faculty = data.get("faculty")
+    subject = data.get("subject")
+
+    if not all([question, institute, faculty, subject]):
+        return jsonify({"error": "Missing fields"}), 400
+
+    # New path: Questions/institutes/{institute}/faculties/{faculty}/subjects/{subject}
+    doc_ref = (
+        firestore_client.collection("Questions")
+        .document("institutes")
+        .collection(institute)
+        .document("faculties")
+        .collection(faculty)
+        .document("subjects")
+        .collection(subject)
+        .document("current_question")
+    )
+
+    doc_ref.set({"question": question}, merge=True)
+
+    return jsonify({"message": "Question posted"}), 200
+
+
+# Student fetches the question
+@app.route("/get_question", methods=["GET"])
+def get_question():
+    institute = request.args.get("institute")
+    faculty = request.args.get("faculty")
+    subject = request.args.get("subject")
+
+    if not all([institute, faculty, subject]):
+        return jsonify({"error": "Missing fields"}), 400
+
+    doc_ref = (
+        firestore_client.collection("Questions")
+        .document("institutes")
+        .collection(institute)
+        .document("faculties")
+        .collection(faculty)
+        .document("subjects")
+        .collection(subject)
+        .document("current_question")
+    )
+
+    doc = doc_ref.get()
+    if not doc.exists:
+        return jsonify({"error": "No question found"}), 404
+
+    question = doc.to_dict().get("question", "")
+    return jsonify({"question": question}), 200
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
