@@ -1,0 +1,38 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  openFile: () => ipcRenderer.invoke('dialog:openFile'),
+//  saveFile: (filePath, content) => ipcRenderer.invoke('file:saveFile', filePath, content),
+//  saveFileAs: (content) => ipcRenderer.invoke('file:saveAsFile', content),
+saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePath, content }),
+  saveAsFile: (content) => ipcRenderer.invoke('file:saveAsFile', content),
+  openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
+  readFile: (path) => ipcRenderer.invoke('readFile', path), // ✅ Add this
+  runCommand: (cmd) => ipcRenderer.invoke('run-command', cmd),
+  windowControl: (action) => ipcRenderer.send('window-control', action),
+
+  joinPath: (folder, file) => ipcRenderer.invoke('join-path', folder, file),
+  saveFileDialog: (defaultName) => ipcRenderer.invoke('dialog:saveTempFile', defaultName),
+  saveTempFile: (defaultName) => ipcRenderer.invoke('save-temp-file', defaultName),
+
+  getFolderTree: (folderPath) => ipcRenderer.invoke('get-folder-tree', folderPath),
+  getDirName: (fullPath) => ipcRenderer.invoke('path:getDirName', fullPath),
+
+  renameFileOrFolder: (oldPath, newPath) => ipcRenderer.invoke('rename-file-or-folder', oldPath, newPath),
+  fileExists: (path) => ipcRenderer.invoke('file-exists', path),
+
+  writeOutputToTempFile: (outputText) => ipcRenderer.invoke('write-output-temp', outputText),
+
+  
+  exportReport: (openedFiles, currentUser, currentFolder,outputs) => ipcRenderer.invoke('export-report', {
+    openedFiles,
+    currentUser,
+    currentFolder,
+    outputs
+  }),
+});
+
+
+
