@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <title>CodeX</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+
+    #sidebar {
+      background: #252526;
+      min-width: 140px;
+    }
+
+    #topbar {
+      background: #333333;
+      color: #d4d4d4;
+      -webkit-app-region: drag;
+    }
+
+    #topbar button {
+      -webkit-app-region: no-drag;
+    }
+
+    #output {
+      background: #1e1e1e;
+      border-top: 1px solid #3c3c3c;
+      color: #d4d4d4;
+    }
+
+    .gutter {
+      background-color: #3c3c3c;
+      border-radius: 2px;
+      transition: background-color 0.2s ease;
+    }
+
+    .gutter:hover {
+      background-color: #555555;
+    }
+
+    .gutter.gutter-horizontal {
+      cursor: col-resize;
+      width: 4px;
+    }
+
+    .gutter.gutter-vertical {
+      cursor: row-resize;
+      height: 4px;
+    }
+    /* Add to your CSS */
+    #sidebar {
+      overflow-y: auto;
+      max-height: 100vh;       /* So it doesn't overflow page */
+      padding-right: 4px;      /* Optional: for scrollbar spacing */
+    }
+    #sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+#sidebar::-webkit-scrollbar-thumb {
+  background-color: #555;
+  border-radius: 3px;
+}
+
+
+
+    #sidebar li {
+      border-radius: 4px;
+      padding: 4px 8px;
+    }
+
+    #sidebar li:hover {
+      background: #3c3c3c;
+    }
+
+    #tabBar {
+      background: #252526;
+      display: flex;
+      overflow-x: auto;
+      border-bottom: 1px solid #3c3c3c;
+      height: 32px;
+    }
+
+    .tab {
+      padding: 4px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      background: #2d2d2d;
+      border-right: 1px solid #3c3c3c;
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      font-family: Consolas, 'Courier New', monospace;
+    }
+
+    .tab.active {
+      background: #1e1e1e;
+      font-weight: 500;
+      border-bottom: 2px solid #007acc;
+    }
+
+    .tab-close {
+      margin-left: 8px;
+      color: #888;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .tab-close:hover {
+      color: #f87171;
+    }
+
+    #tabBar::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    #tabBar::-webkit-scrollbar-track {
+      background: #2d2d2d;
+    }
+
+    #tabBar::-webkit-scrollbar-thumb {
+      background: #555;
+    }
+
+    #tabBar::-webkit-scrollbar-thumb:hover {
+      background: #888;
+    }
+  </style>
+</head>
+
+<body class="h-full flex flex-col">
+
+  <div id="topbar"></div>
+   <!-- <div id="topbar" class="flex items-center px-4 h-10 space-x-2 text-sm"></div> -->
+  <div id="app" class="flex-1"></div>
+
+  
+
+  <div id="editorLayout" class="hidden flex-1 flex flex-col">
+    <div id="mainSplit" class="flex flex-1 h-full">
+      <!-- <div id="sidebar" class="w-64 bg-[#1e1e1e] text-white p-4 border-r border-[#3c3c3c] overflow-y-auto"></div> -->
+       <div id="sidebar" class="...">
+        <h3 id="sidebarHeader" class="text-lg font-bold mb-4">Explorer</h3>
+        <div id="fileList"></div>
+      </div>
+
+
+      <div id="mainPane" class="flex flex-col w-full h-full">
+        <div id="tabBar"></div>
+        <div id="editor" class="w-full flex-1"></div>
+        <div id="output" class="p-4 overflow-y-auto h-32"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ✅ Get Question Modal
+  <div id="getQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
+    <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
+      <h2 class="text-lg font-bold text-[#61dafb] mb-4">Get Question</h2>
+      <label class="block text-sm text-white mb-1">Faculty:</label>
+      <input id="facultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+      <label class="block text-sm text-white mb-1">Subject:</label>
+      <input id="subjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+      <div class="flex justify-end space-x-2">
+        <button id="cancelQuestionBtn" class="text-white hover:text-red-400">Cancel</button>
+        <button id="fetchQuestionBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Fetch</button>
+      </div>
+    </div>
+  </div> -->
+  <script type="module" src="./src/renderer.js"></script>
+</body>
+</html>
