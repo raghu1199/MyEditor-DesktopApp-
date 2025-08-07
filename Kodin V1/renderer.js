@@ -1,9 +1,14 @@
 import * as monaco from 'monaco-editor';
 import Split from 'split.js';
 
+
+
+
 class CodeEditorApp {
+
   constructor() {
     this.initTopbar();
+    
     this.tabs = [];  // For multi-tab
     this.activeTabIndex = -1;
     this.untitledCounter = 1;
@@ -17,12 +22,14 @@ class CodeEditorApp {
     role: '',
     institute: ''
   };
+  this.copilot=null;
 
     this.loadFolderToSidebar = this.loadFolderToSidebar.bind(this);
 
     this.showWelcomePage();
     
   }
+
 
 initTopbar() {
   const topbar = document.getElementById('topbar');
@@ -51,6 +58,8 @@ initTopbar() {
         <button id="postQuestionBtn" class="hover:text-teal-400 hidden">📝 Post Question</button>
         <button id="viewMySubmissionsBtn" class="hover:text-teal-400 hidden">📥 My Submissions</button>
         <button id="viewClassSubmissionsBtn" class="hover:text-teal-400 hidden">📚 View Class Submissions</button>
+        <button id="copilotToggleFromMenu" class="text-sm hover:text-teal-400">Toggle Copilot</button>
+
 
        
 
@@ -80,6 +89,8 @@ initTopbar() {
   const fileBtn = document.getElementById('fileBtn');
   const fileMenu = document.getElementById('fileMenu');
   const newFileTypeMenu = document.getElementById('newFileTypeMenu');
+
+
 
   const getQuestionBtn = document.getElementById('getQuestionBtn');
     getQuestionBtn.classList.remove('hidden'); // Make it visible
@@ -210,8 +221,6 @@ initTopbar() {
           this.loadFolderToSidebar(refreshed);
         });
     }
-
-
 };
 
   // upload session
@@ -226,6 +235,28 @@ initTopbar() {
       this.saveCurrentFile();
     }
   });
+
+        document.getElementById("askCopilotBtn")?.addEventListener("click", () => {
+        const input = document.getElementById("copilotInput");
+        const prompt = input.value.trim();
+        if (prompt) {
+          this.fetchCopilotResponse(prompt);
+          input.value = '';
+        }
+      });
+
+      document.getElementById("closeCopilotBtn")?.addEventListener("click", () => {
+        this.hideCopilotPane();
+      });
+
+      document.getElementById("copilotToggleBtn")?.addEventListener("click", () => {
+        this.toggleCopilotPane();
+      });
+
+        
+      
+       
+
 }
 
 
@@ -305,6 +336,7 @@ async fetchQuestion(faculty, subject) {
     this.currentFolderPath = folderPath;
 
     setTimeout(() => {
+
     requestIdleCallback(() => {
       console.log("before sidebar load");
       this.loadFolderToSidebar(refreshed);
@@ -896,6 +928,7 @@ if (refreshed) {
     this.setupEditor();
     this.setupOutput();
     this.setupSplit();
+    
 
     const topBar = document.getElementById('topBarUserInfo');
     if (topBar) {
@@ -925,6 +958,14 @@ if (refreshed) {
         this.viewClassSubmissions();
       };
     };
+
+    this.toggleCopilotPane();
+
+    const copilotToggleBtn = document.getElementById("copilotToggleFromMenu");
+      if (copilotToggleBtn) {
+        copilotToggleBtn.addEventListener("click", () => this.toggleCopilotPane());
+      }
+    
 };
 
  setupSidebar() {
@@ -1569,21 +1610,181 @@ async runCode() {
     document.getElementById('output').innerText = '// Output...';
   }
 
-  setupSplit() {
-    Split(['#sidebar', '#mainPane'], {
-      sizes: [20, 80],
-      minSize: 150,
-      gutterSize: 4,
-    });
+//   setupSplit() {
+//     Split(['#sidebar', '#mainPane'], {
+//       sizes: [20, 80],
+//       minSize: 150,
+//       gutterSize: 4,
+//     });
 
-    Split(['#editor', '#output'], {
-      direction: 'vertical',
-      sizes: [80, 20],
-      minSize: 100,
+//     Split(['#editor', '#output'], {
+//       direction: 'vertical',
+//       sizes: [80, 20],
+//       minSize: 100,
+//       gutterSize: 4,
+//     });
+//   }
+// }
+
+
+showCopilotPane() {
+  const pane = document.getElementById('copilotPane');
+  if (pane) pane.classList.remove('hidden');
+}
+
+hideCopilotPane() {
+  const pane = document.getElementById('copilotPane');
+  if (pane) pane.classList.add('hidden');
+}
+
+// toggleCopilotPane() {
+//   const copilotPane = document.getElementById("copilotPane");
+//   const copilotGutter = document.getElementById("copilotGutter");
+
+//   if (!copilotPane || !copilotGutter) return;
+
+//   const isVisible = !copilotPane.classList.contains("hidden");
+
+//   if (isVisible) {
+//     copilotPane.classList.add("hidden");
+//     copilotGutter.classList.add("hidden");
+
+//     if (this.copilotSplit) {
+//       this.copilotSplit.destroy();
+//       this.copilotSplit = null;
+//     }
+//   } else {
+//     copilotPane.classList.remove("hidden");
+//     copilotGutter.classList.remove("hidden");
+
+//     this.copilotSplit = Split(["#mainPane", "#copilotPane"], {
+//       sizes: [75, 25],
+//       minSize: [200, 200],
+//       gutterSize: 4,
+//     });
+//   }
+// }
+toggleCopilotPane() {
+  let copilotPane = document.getElementById("copilotPane");
+  let copilotGutter = document.getElementById("copilotGutter");
+  const mainPane = document.getElementById("mainPane");
+
+  if (!mainPane) return;
+
+  // If copilotPane was completely removed, recreate it
+  if (!copilotPane) {
+    copilotPane = document.createElement("div");
+    copilotPane.id = "copilotPane";
+    copilotPane.className = "w-[25%] min-w-[200px] bg-gray-100 overflow-auto"; // Tailwind or your class
+    mainPane.parentElement.appendChild(copilotPane);
+  }
+
+  if (!copilotGutter) {
+    copilotGutter = document.createElement("div");
+    copilotGutter.id = "copilotGutter";
+    copilotGutter.className = "gutter gutter-horizontal";
+    mainPane.parentElement.insertBefore(copilotGutter, copilotPane);
+  }
+
+  const isVisible = !copilotPane.classList.contains("hidden");
+
+  if (isVisible) {
+    // Hide and destroy the split
+    copilotPane.classList.add("hidden");
+    copilotGutter.classList.add("hidden");
+
+    if (this.copilotSplit) {
+      this.copilotSplit.destroy();
+      this.copilotSplit = null;
+    }
+
+    mainPane.style.width = "100%";
+  } else {
+    // Show and re-split
+    copilotPane.classList.remove("hidden");
+    copilotGutter.classList.remove("hidden");
+    mainPane.style.width = "";
+
+    this.copilotSplit = Split(["#mainPane", "#copilotPane"], {
+      sizes: [75, 25],
+      minSize: [300, 200],
       gutterSize: 4,
+      gutter: () => copilotGutter,
     });
   }
 }
+
+
+clearCopilotContent() {
+  const content = document.getElementById('copilotContent');
+  if (content) content.innerHTML = '';
+}
+
+appendCopilotMessage(text, sender) {
+  const content = document.getElementById('copilotContent');
+  const msg = document.createElement('div');
+  msg.textContent = text;
+  msg.className = sender === 'user'
+    ? 'bg-gray-800 p-2 rounded text-blue-300'
+    : 'bg-gray-700 p-2 rounded text-green-300';
+  content.appendChild(msg);
+  content.scrollTop = content.scrollHeight;
+}
+
+async fetchCopilotResponse(prompt) {
+  this.appendCopilotMessage(prompt, 'user');
+  this.appendCopilotMessage("Thinking...", 'copilot');
+
+  try {
+    const res = await fetch('http://localhost:5000/copilot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    const data = await res.json();
+    const reply = data?.reply || "No response received.";
+
+    const last = document.querySelector('#copilotContent .bg-gray-700:last-child');
+    if (last?.textContent === "Thinking...") last.remove();
+
+    this.appendCopilotMessage(reply, 'copilot');
+  } catch (err) {
+    console.error("Copilot error:", err);
+    this.appendCopilotMessage("⚠️ Error reaching Copilot.", 'copilot');
+  }
+}
+
+
+
+setupSplit() {
+  // Sidebar and Main
+  Split(['#sidebar', '#mainWithCopilot'], {
+    sizes: [20, 80],
+    minSize: 150,
+    gutterSize: 4,
+    elementStyle: (dimension, size, gutterSize) => ({
+      'flex-basis': `calc(${size}% - ${gutterSize}px)`,
+    }),
+    gutterStyle: (dimension, gutterSize) => ({
+      'flex-basis': `${gutterSize}px`,
+    }),
+  });
+
+  // Editor and Output inside Main
+  Split(['#editor', '#output'], {
+    direction: 'vertical',
+    sizes: [80, 20],
+    minSize: 100,
+    gutterSize: 4,
+  });
+
+  // Editor and Copilot (initially only when Copilot is visible)
+  this.copilotSplit = null;
+}
+
+}
+
 
 document.addEventListener('DOMContentLoaded', () => new CodeEditorApp());
 console.log('Available APIs:', window.electronAPI);
