@@ -43,6 +43,7 @@ class CodeEditorApp {
 
     this.user = {
     name: '',
+    id:'',
     role: '',
     institute: ''
   };
@@ -634,8 +635,6 @@ async viewClassSubmissions() {
         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View Class Submissions</h2>
 
-            
-
             <label class="block mb-2 font-medium">Subject:</label>
             <input type="text" id="subject" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
 
@@ -653,7 +652,7 @@ async viewClassSubmissions() {
 
     modal.querySelector("#loadClassReportsBtn").onclick = async () => {
         const college = this.user.institute;
-        const faculty = this.user.name;//document.getElementById("faculty").value.trim();
+        const faculty = this.user.id; // teacher's ID
         const subject = document.getElementById("subject").value.trim();
         const classId = document.getElementById("classId").value.trim();
 
@@ -664,12 +663,11 @@ async viewClassSubmissions() {
 
         try {
             const res = await fetch(`${this.base_server}/get-reports?college=${college}&faculty=${faculty}&subject=${subject}&class=${classId}`);
-
             const data = await res.json();
             const reports = data.reports || [];
 
-            modal.remove(); // Close input modal
-            this.showClassReportViewerModal(subject, reports, college, faculty, classId); // Open viewer
+            modal.remove();
+            this.showClassReportViewerModal(subject, reports, college, faculty, classId);
         } catch (err) {
             this.showToast("Failed to load class reports.");
             console.error(err);
@@ -677,34 +675,60 @@ async viewClassSubmissions() {
     };
 }
 
-
 showClassReportViewerModal(subject, reports, college, faculty, classId) {
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
 
-    const reportCards = reports.map((r, i) => `
-        <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
-            <div class="flex justify-between items-center">
-                <div>
-                    <p class="text-[#61dafb] font-semibold">${r.pdf_name || 'Unnamed PDF'}</p>
-                    <p class="text-gray-400 text-sm">Student: ${r.student_name || 'Unknown'}</p>
-                </div>
+    // Group reports by student_id
+    const grouped = reports.reduce((acc, r) => {
+        if (!acc[r.student_id]) acc[r.student_id] = [];
+        acc[r.student_id].push(r);
+        return acc;
+    }, {});
+
+    const reportCards = Object.entries(grouped).map(([studentId, studentReports]) => {
+        const studentName = studentReports[0]?.student_name || "Unknown";
+        const pdfList = studentReports.map(r => `
+            <div class="flex justify-between items-center mt-2">
+                <span class="text-sm text-gray-300">${r.pdf_name || 'session.pdf'}</span>
                 <button 
-                    class="download-btn bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1] font-semibold" 
+                    class="download-btn bg-[#61dafb] text-black px-2 py-1 rounded hover:bg-[#21a1f1]" 
                     data-path="${r.storage_path}">
                     Download
                 </button>
             </div>
-        </div>
-    `).join("");
+        `).join("");
+
+        return `
+            <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
+                <p class="text-[#61dafb] font-semibold">${studentName}</p>
+                <p class="text-gray-400 text-sm">ID: ${studentId}</p>
+                ${pdfList}
+                <div class="mt-3">
+                    <input 
+                        type="number" 
+                        min="0" max="100" 
+                        class="marks-input w-20 p-1 rounded bg-[#444] border border-gray-600 text-white text-center" 
+                        data-student-id="${studentId}" 
+                        placeholder="Marks"
+                        value="${studentReports[0]?.marks || ''}"
+                    />
+                </div>
+            </div>
+        `;
+    }).join("");
 
     modal.innerHTML = `
-        <div class="bg-[#333333] rounded-lg mt-16 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
-            <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject}-${classId}</h2>
+        <div class="bg-[#333333] rounded-lg mt-16 w-[650px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+            <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject} - ${classId}</h2>
 
             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
 
-            
+            ${reports.length > 0 ? `
+            <button id="updateMarksBtn" class="mt-4 w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">
+                Update Marks
+            </button>` : ""}
+
             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
         </div>
     `;
@@ -712,16 +736,232 @@ showClassReportViewerModal(subject, reports, college, faculty, classId) {
 
     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
 
-    // Bind all download buttons
-    const downloadButtons = modal.querySelectorAll(".download-btn");
-    downloadButtons.forEach(btn => {
+    // Download handlers
+    modal.querySelectorAll(".download-btn").forEach(btn => {
         const path = btn.dataset.path;
         btn.onclick = () => this.downloadReport(path);
     });
 
-    // Optional merge for all class submissions
-    
+    // Update marks
+    const updateBtn = modal.querySelector("#updateMarksBtn");
+    if (updateBtn) {
+        updateBtn.onclick = async () => {
+            const marksData = [];
+            modal.querySelectorAll(".marks-input").forEach(input => {
+                marksData.push({
+                    student_id: input.dataset.studentId,
+                    marks: input.value
+                });
+            });
+
+            try {
+                const res = await fetch(`${this.base_server}/update-marks`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        college,
+                        faculty,
+                        subject,
+                        classId,
+                        marksData
+                    })
+                });
+                const data = await res.json();
+                this.showToast(data.message || "Marks updated successfully");
+            } catch (err) {
+                console.error(err);
+                this.showToast("Failed to update marks.");
+            }
+        };
+    }
 }
+
+
+
+// async viewClassSubmissions() {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View Class Submissions</h2>
+
+            
+
+//             <label class="block mb-2 font-medium">Subject:</label>
+//             <input type="text" id="subject" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+//             <label class="block mb-2 font-medium">Class:</label>
+//             <input type="text" id="classId" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+//             <button id="loadClassReportsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Load Class Reports</button>
+
+//             <button id="closeModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     modal.querySelector("#closeModalBtn").onclick = () => modal.remove();
+
+//     modal.querySelector("#loadClassReportsBtn").onclick = async () => {
+//         const college = this.user.institute;
+//         const faculty = this.user.id;//document.getElementById("faculty").value.trim();
+//         const subject = document.getElementById("subject").value.trim();
+//         const classId = document.getElementById("classId").value.trim();
+
+//         if (!college || !faculty || !subject || !classId) {
+//             this.showToast("Please fill all fields.");
+//             return;
+//         }
+
+//         try {
+//             const res = await fetch(`${this.base_server}/get-reports?college=${college}&faculty=${faculty}&subject=${subject}&class=${classId}`);
+
+//             const data = await res.json();
+//             const reports = data.reports || [];
+
+//             modal.remove(); // Close input modal
+//             this.showClassReportViewerModal(subject, reports, college, faculty, classId); // Open viewer
+//         } catch (err) {
+//             this.showToast("Failed to load class reports.");
+//             console.error(err);
+//         }
+//     };
+// }
+// showClassReportViewerModal(subject, reports, college, faculty, classId) {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+
+//     const reportCards = reports.map((r) => `
+//         <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700 flex justify-between items-center">
+//             <div>
+//                 <p class="text-[#61dafb] font-semibold">${r.pdf_name || 'Unnamed PDF'}</p>
+//                 <p class="text-gray-400 text-sm">
+//                     Student: ${r.student_name || 'Unknown'} 
+//                     <span class="text-gray-500 text-xs">(ID: ${r.student_id || 'N/A'})</span>
+//                 </p>
+//             </div>
+//             <div class="flex items-center gap-2">
+//                 <button 
+//                     class="download-btn bg-[#61dafb] text-black px-3 py-1 rounded hover:bg-[#21a1f1] font-semibold" 
+//                     data-path="${r.storage_path}">
+//                     Download
+//                 </button>
+//                 <input 
+//                     type="number" 
+//                     min="0" max="100" 
+//                     class="marks-input w-16 p-1 rounded bg-[#444] border border-gray-600 text-white text-center" 
+//                     data-student-id="${r.student_id}" 
+//                     placeholder="Marks" 
+//                     value="${r.marks || ''}"
+//                 />
+//             </div>
+//         </div>
+//     `).join("");
+
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-16 w-[650px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject}-${classId}</h2>
+
+//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
+
+//             ${reports.length > 0 ? `
+//             <button id="updateMarksBtn" class="mt-4 w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">
+//                 Update Marks
+//             </button>` : ""}
+
+//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
+
+//     // Download handlers
+//     modal.querySelectorAll(".download-btn").forEach(btn => {
+//         const path = btn.dataset.path;
+//         btn.onclick = () => this.downloadReport(path);
+//     });
+
+//     // Update marks handler
+//     const updateBtn = modal.querySelector("#updateMarksBtn");
+//     if (updateBtn) {
+//         updateBtn.onclick = async () => {
+//             const marksData = [];
+//             modal.querySelectorAll(".marks-input").forEach(input => {
+//                 marksData.push({
+//                     student_id: input.dataset.studentId, // ✅ use ID now
+//                     marks: input.value
+//                 });
+//             });
+
+//             try {
+//                 const res = await fetch(`${this.base_server}/update-marks`, {
+//                     method: "POST",
+//                     headers: { "Content-Type": "application/json" },
+//                     body: JSON.stringify({
+//                         college,
+//                         faculty,
+//                         subject,
+//                         classId,
+//                         marksData
+//                     })
+//                 });
+//                 const data = await res.json();
+//                 this.showToast(data.message || "Marks updated successfully");
+//             } catch (err) {
+//                 console.error(err);
+//                 this.showToast("Failed to update marks.");
+//             }
+//         };
+//     }
+// }
+
+
+
+// showClassReportViewerModal(subject, reports, college, faculty, classId) {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+
+//     const reportCards = reports.map((r, i) => `
+//         <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
+//             <div class="flex justify-between items-center">
+//                 <div>
+//                     <p class="text-[#61dafb] font-semibold">${r.pdf_name || 'Unnamed PDF'}</p>
+//                     <p class="text-gray-400 text-sm">Student: ${r.student_name || 'Unknown'}</p>
+//                 </div>
+//                 <button 
+//                     class="download-btn bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1] font-semibold" 
+//                     data-path="${r.storage_path}">
+//                     Download
+//                 </button>
+//             </div>
+//         </div>
+//     `).join("");
+
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-16 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject}-${classId}</h2>
+
+//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
+
+            
+//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
+
+//     // Bind all download buttons
+//     const downloadButtons = modal.querySelectorAll(".download-btn");
+//     downloadButtons.forEach(btn => {
+//         const path = btn.dataset.path;
+//         btn.onclick = () => this.downloadReport(path);
+//     });
+
+//     // Optional merge for all class submissions
+    
+// }
 
 
 
@@ -799,6 +1039,7 @@ async showPostQuestionModal() {
   };
 }
 
+
 async showUploadSessionModal() {
   let modal = document.getElementById("uploadSessionModal");
 
@@ -841,12 +1082,13 @@ async showUploadSessionModal() {
     const subject = document.getElementById("uploadSubjectInput").value.trim();
     const classId = document.getElementById("uploadClassInput").value.trim();
 
-    const studentName = this.user.name;
+    const studentId = this.user.id; // ✅ New: use stored student ID
+    const studentName = this.user.name ||'default';
     const college = this.user.institute;
     const openedFiles = this.openedFilePaths || [];
     const currentFolder = this.currentFolderPath || "";
 
-    if (!faculty || !subject || !classId || !college || !studentName) {
+    if (!faculty || !subject || !classId || !college || !studentName || !studentId) {
       this.showToast("⚠️ Please fill all required fields.");
       return;
     }
@@ -862,14 +1104,14 @@ async showUploadSessionModal() {
       );
 
       if (!exportResult.success || !exportResult.path) {
-       this.showToast("❌ Failed to generate session PDF.");
+        this.showToast("❌ Failed to generate session PDF.");
         return;
       }
 
       // Step 2: Read PDF as Blob
       const pdfBlob = await window.electronAPI.readFileAsBlob(exportResult.path);
 
-      // Step 3: Upload
+      // Step 3: Upload to Flask API
       const formData = new FormData();
       formData.append("file", pdfBlob, "session.pdf");
       formData.append("college", college);
@@ -878,6 +1120,7 @@ async showUploadSessionModal() {
       formData.append("class", classId);
       formData.append("pdf_name", studentName);
       formData.append("student_name", studentName);
+      formData.append("student_id", studentId); // ✅ Pass student ID to backend
 
       const response = await fetch(`${this.base_server}/upload-report`, {
         method: "POST",
@@ -901,15 +1144,16 @@ async showUploadSessionModal() {
     modal.classList.add("hidden");
     modal.classList.remove("flex");
 
-  const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
-if (refreshed) {
-  requestIdleCallback(() => {
-    this.loadFolderToSidebar(refreshed);
-  });
-}
-
+    const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
+    if (refreshed) {
+      requestIdleCallback(() => {
+        this.loadFolderToSidebar(refreshed);
+      });
+    }
   };
 }
+
+
 
 
 
@@ -943,6 +1187,7 @@ if (refreshed) {
       }; 
     });
   }
+  
 
   button(label, role) {
     return `
@@ -952,16 +1197,24 @@ if (refreshed) {
     `;
   }
 
+
   showLoginForm(role) {
     this.toggleEditorActions(false);
     const app = document.getElementById('app');
+    this.user.role=role;
+
+    const isStudent = this.user.role.toLowerCase() === "student";
+    const title = `${this.user.role} Login`;
+
     app.innerHTML = `
       <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
         <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
-          <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${role} Login</h2>
+          <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
           <form id="loginForm" class="space-y-6">
             ${this.inputField('Institute', 'text')}
-            ${this.inputField('Name', 'text')}
+            ${isStudent 
+              ? this.inputField('Roll Number', 'text') 
+              : this.inputField('Name', 'text')}
             ${this.inputField('Password', 'password')}
             <button type="submit"
               class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
@@ -971,22 +1224,69 @@ if (refreshed) {
         </div>
       </div>
     `;
+
     document.getElementById('loginForm').onsubmit = e => {
       e.preventDefault();
-      const name = document.querySelector('#loginForm input[placeholder="Name"]').value.trim();
+
       const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
       const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
+      let id;
 
-      // Optional: Add authentication logic here if needed.
+      if (isStudent) {
+        id = document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim();
+      } else {
+        id = document.querySelector('#loginForm input[placeholder="Name"]').value.trim();
+      }
 
       // Save user info
-      this.user.name = name;
-      this.user.role = role;  // already passed as parameter
+      this.user.id = id;
       this.user.institute = institute;
+
+      // Validation or authentication logic can go here
 
       this.showEditor();
     };
-  }
+}
+
+
+  // showLoginForm(role) {
+  //   this.toggleEditorActions(false);
+  //   const app = document.getElementById('app');
+  //   app.innerHTML = `
+  //     <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+  //       <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
+  //         <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${role} Login</h2>
+  //         <form id="loginForm" class="space-y-6">
+  //           ${this.inputField('Institute', 'text')}
+  //           ${this.inputField('Roll Number', 'text')}
+  //           ${this.inputField('Password', 'password')}
+  //           <button type="submit"
+  //             class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+  //             Login
+  //           </button>
+  //         </form>
+  //       </div>
+  //     </div>
+  //   `;
+  //   document.getElementById('loginForm').onsubmit = e => {
+  //     e.preventDefault();
+  //     const roll_number = document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim();
+  //     const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
+  //     const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
+
+  //     // Optional: Add authentication logic here if needed.
+
+  //     // Save user info
+  //     this.user.id = roll_number;
+  //     this.user.role = role;  // already passed as parameter
+  //     this.user.institute = institute;
+
+      
+
+  //     // validation
+  //     this.showEditor();
+  //   };
+  // }
 
   inputField(label, type) {
     return `
@@ -1766,77 +2066,6 @@ async runCode() {
 
 
 
-// async runCode() {
-  
-  // const outputArea = document.getElementById('output');
-  // if (!outputArea) return;
-
-  // const currentTab = this.tabs[this.activeTabIndex];
-  // if (!currentTab || !this.editorInstance) 
-  // {
-  //   outputArea.innerText = "⚠️ No active file to run.";
-  //   return;
-  // }
-      
-
-  
-  
-
-//   const fileName = currentTab.name || '';
-//   const extension = fileName.split('.').pop();
-
-//   // Ensure file is saved before running
-//   if (!currentTab.filePath) {
-//     alert("⚠️ Please save the file before running.");
-//     return;
-//   }
-
-  // this.saveCurrentFile();
-  // if (!this.openedFilePaths.includes(currentTab.filePath)) {
-  // this.openedFilePaths.push(currentTab.filePath);
-  // console.log("openedFilePaths:",this.openedFilePaths);
-// }
-
-//   let command;
-//   outputArea.innerText="";
-
-//   if (extension === 'js') {
-//     command = `node "${currentTab.filePath}"`;
-//   } else if (extension === 'py') {
-//     command = `python "${currentTab.filePath}"`; // or use python3 depending on system
-//   } else {
-//     // this.showOutput(`❌ Unsupported file type: .${extension}`);
-//     outputArea.innerText = `❌ Unsupported file type: .${extension}`;
-//     return;
-//   }
-
-//   // Run the command via Electron main process
-//   window.electronAPI.runCommand(command)
-//     .then(output => {
-//       // this.showOutput(output || "✅ Finished with no output.");
-//       this.outputs=output || "✅ Finished ";
-      
-//       outputArea.innerText=output || "✅ Finished "
-      
-//     })
-//     .catch(error => {
-//       // this.showOutput(`❌ Runtime Error:\n${error}`);
-//       outputArea.innerText=`❌ Runtime Error:\n${error}`;
-//     });
-// }
-
-
-
-
-
-
-  // Your other methods (openTab, switchTab...) go here
-
-
-
-
-
-
 
 
   detectLang(filename) {
@@ -1869,17 +2098,17 @@ async runCode() {
   setupEditor() {
     const editorContainer = document.getElementById('editor');
 
-    const activeTab = this.tabs[this.activeTabIndex];
-    if (!activeTab) {
-      this.showToast('No file is open.');
+  //   const activeTab = this.tabs[this.activeTabIndex];
+  //   if (!activeTab) {
+  //     this.showToast('No file is open.');
       
-    }
-  let ext = activeTab.name.includes('.') ? activeTab.name.split('.').pop() : 'txt';
+  //   }
+  // let ext = activeTab.name.includes('.') ? activeTab.name.split('.').pop() : 'txt';
 
     
     this.editorInstance = monaco.editor.create(editorContainer, {
       value: '',
-      language: getLanguageByExtension(ext),
+      language: 'python',
       theme: 'vs-dark',
       automaticLayout: true
     });
