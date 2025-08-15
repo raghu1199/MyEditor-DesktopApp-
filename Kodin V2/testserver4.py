@@ -19,7 +19,7 @@ import pandas as pd
 # # ✅ 1️⃣ Paths
 # BASE_MODEL = "bigcode/starcoderbase-3b"   # Only needed for tokenizer
 # CHECKPOINT = "./output/checkpoint-6375"   # Your fine-tuned checkpoint path
-# os.environ["HF_TOKEN"] = "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"  # replace with your token
+
 
 # offload_dir="./offload"
 # os.makedirs(offload_dir, exist_ok=True)
@@ -956,5 +956,6 @@ if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5005, debug=True)
 
     # app.run(host="0.0.0.0", port=5005)
+
 
 
