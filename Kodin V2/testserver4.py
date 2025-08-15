@@ -7,6 +7,8 @@ from PyPDF2 import PdfMerger  # pip install PyPDF2
 import tempfile
 from io import BytesIO
 import pandas as pd
+import hashlib
+
 
 
 
@@ -19,7 +21,7 @@ import pandas as pd
 # # ✅ 1️⃣ Paths
 # BASE_MODEL = "bigcode/starcoderbase-3b"   # Only needed for tokenizer
 # CHECKPOINT = "./output/checkpoint-6375"   # Your fine-tuned checkpoint path
-
+# os.environ["HF_TOKEN"] = "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"  # replace with your token
 
 # offload_dir="./offload"
 # os.makedirs(offload_dir, exist_ok=True)
@@ -257,295 +259,6 @@ def generate_marks_excel():
         return jsonify({"error": str(e)}), 500
 
 
-# @app.route("/generate_marks_excel", methods=["POST"])
-# def generate_marks_excel():
-#     try:
-#         data = request.json or {}
-#         college = data.get("college")
-#         faculty = data.get("faculty")
-#         subject = data.get("subject")
-
-#         if not all([college, faculty, subject]):
-#             return jsonify({"error": "Missing parameters"}), 400
-
-#         # Step 1: Get all class IDs under the subject
-#         subject_ref = (
-#             firestore_client
-#             .collection("marks")
-#             .document(college)
-#             .collection(faculty)
-#             .document(subject)
-#         )
-
-#         class_ids = sorted([cls.id for cls in subject_ref.collections()])
-#         print("recived",data)
-#         print("subject ref:",subject_ref)
-#         print("class_ids:",class_ids)
-#         # Step 2: Prepare student data
-#         student_data = {}
-#         for class_id in class_ids:
-#             marks_doc_ref = (
-#                 firestore_client
-#                 .collection("marks")
-#                 .document(college)
-#                 .collection(faculty)
-#                 .document(subject)
-#                 .collection(class_id)
-#                 .document("marks")
-#             )
-#             marks_doc = marks_doc_ref.get()
-#             if marks_doc.exists:
-#                 for student_id, info in marks_doc.to_dict().items():
-#                     name = info.get("name", "")
-#                     marks = info.get("marks", "")
-#                     if student_id not in student_data:
-#                         student_data[student_id] = {"name": name}
-#                     student_data[student_id][class_id] = marks
-
-#         # Step 3: Build DataFrame
-#         sorted_student_ids = sorted(student_data.keys())
-#         print("sorted:",sorted_student_ids)
-#         columns = ["StudentID", "StudentName"] + class_ids
-#         rows = []
-#         for sid in sorted_student_ids:
-#             row = [sid, student_data[sid].get("name", "")]
-#             for cid in class_ids:
-#                 row.append(student_data[sid].get(cid, ""))
-#             rows.append(row)
-
-#         df = pd.DataFrame(rows, columns=columns)
-#         print("student pandasL:",rows,columns)
-
-#         # Step 4: Save to in-memory buffer
-#         output = BytesIO()
-#         df.to_excel(output, index=False)
-#         output.seek(0)
-
-#         return send_file(
-#             output,
-#             as_attachment=True,
-#             download_name=f"{subject}_marks.xlsx",
-#             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-#         )
-
-#     except Exception as e:
-#         print("Error generating Excel:", e)
-#         return jsonify({"error": str(e)}), 500
-
-
-# from flask import after_this_request
-# import tempfile, os
-
-# @app.route("/generate_marks_excel", methods=["POST"])
-# def generate_marks_excel():
-#     try:
-#         data = request.json or {}
-#         print("Received:", data)
-#         college = data.get("college")
-#         faculty = data.get("faculty")
-#         subject = data.get("subject")
-
-#         if not all([college, faculty, subject]):
-#             return jsonify({"error": "Missing parameters"}), 400
-
-#         # Step 1: Get all class IDs under the subject
-#         subject_ref = (
-#             firestore_client
-#             .collection("marks")
-#             .document(college)
-#             .collection(faculty)
-#             .document(subject)
-#         )
-
-#         classes = list(subject_ref.collections())
-#         class_ids = sorted([cls.id for cls in classes])  # sort class IDs
-
-#         student_data = {}
-
-#         for class_id in class_ids:
-#             marks_doc_ref = (
-#                 firestore_client
-#                 .collection("marks")
-#                 .document(college)
-#                 .collection(faculty)
-#                 .document(subject)
-#                 .collection(class_id)
-#                 .document("marks")
-#             )
-
-#             marks_doc = marks_doc_ref.get()
-#             if marks_doc.exists:
-#                 marks_data = marks_doc.to_dict()
-#                 for student_id, info in marks_data.items():
-#                     name = info.get("name", "")
-#                     marks = info.get("marks", "")
-
-#                     if student_id not in student_data:
-#                         student_data[student_id] = {"name": name}
-#                     student_data[student_id][class_id] = marks
-
-#         # Build DataFrame
-#         sorted_student_ids = sorted(student_data.keys())
-#         columns = ["StudentID", "StudentName"] + class_ids
-#         rows = []
-
-#         for sid in sorted_student_ids:
-#             row = [sid, student_data[sid].get("name", "")]
-#             for cid in class_ids:
-#                 row.append(student_data[sid].get(cid, ""))
-#             rows.append(row)
-
-#         df = pd.DataFrame(rows, columns=columns)
-
-#         # Write to temporary file
-#         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-#             df.to_excel(tmp.name, index=False)
-#             tmp_path = tmp.name
-
-#         print("temp path:", tmp_path)
-
-#         # Ensure file is deleted after sending
-#         @after_this_request
-#         def remove_file(response):
-#             try:
-#                 os.remove(tmp_path)
-#             except Exception as e:
-#                 print("Error deleting temp file:", e)
-#             return response
-
-#         return send_file(
-#             tmp_path,
-#             as_attachment=True,
-#             download_name=f"{subject}_marks.xlsx",
-#             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-#         )
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-
-
-
-
-# @app.route("/get-reports", methods=["GET"])
-# def get_reports():
-#     college = request.args.get("college")
-#     faculty = request.args.get("faculty")
-#     subject = request.args.get("subject")
-#     class_id = request.args.get("class")
-
-#     if not all([college, faculty, subject, class_id]):
-#         return jsonify({"error": "Missing params"}), 400
-
-#     class_ref = (
-#         firestore_client
-#         .collection(college)
-#         .document(faculty)
-#         .collection(subject)
-#         .document(class_id)
-#     )
-
-#     reports = []
-
-#     # Loop through student_id collections
-#     for student_collection in class_ref.collections():
-#         for report_doc in student_collection.stream():
-#             data = report_doc.to_dict()
-#             reports.append({
-#                 "pdf_name": data.get("pdf_name"),
-#                 "storage_path": data.get("storage_path"),
-#                 "college": data.get("college"),
-#                 "faculty": data.get("faculty"),
-#                 "subject": data.get("subject"),
-#                 "class": data.get("class"),
-#                 "student_name": data.get("student_name"),
-#                 "student_id": data.get("student_id")
-#             })
-
-#     return jsonify({"reports": reports})
-
-
-
-
-# @app.route("/get-reports", methods=["GET"])
-# def get_reports():
-#     college = request.args.get("college")
-#     faculty = request.args.get("faculty")
-#     subject = request.args.get("subject")
-#     class_id = request.args.get("class")
-
-#     if not all([college, faculty, subject, class_id]):
-#         return jsonify({"error": "Missing params"}), 400
-
-#     class_ref = (
-#         firestore_client
-#         .collection(college)
-#         .document(faculty)
-#         .collection(subject)
-#         .document(class_id)
-#     )
-
-#     pdf_collections = class_ref.collections()
-#     reports = []
-
-#     for pdf_collection in pdf_collections:
-#         doc = pdf_collection.document("file").get()
-#         if doc.exists:
-#             data = doc.to_dict()
-#             report_info = {
-#                 "pdf_name": data.get("pdf_name"),
-#                 "storage_path": data.get("storage_path"),
-#                 "college": data.get("college"),
-#                 "faculty": data.get("faculty"),
-#                 "subject": data.get("subject"),
-#                 "class": data.get("class"),
-#                 "student_name": data.get("student_name"),  # ✅ Added
-#                 "student_id": data.get("student_id")       # ✅ Added
-#             }
-#             reports.append(report_info)
-
-#     return jsonify({"reports": reports})
-
-
-# ✅ Get reports: only metadata, NO signed URLs
-# @app.route("/get-reports", methods=["GET"])
-# def get_reports():
-#     college = request.args.get("college")
-#     faculty = request.args.get("faculty")
-#     subject = request.args.get("subject")
-#     class_id = request.args.get("class")
-
-#     if not all([college, faculty, subject, class_id]):
-#         return jsonify({"error": "Missing params"}), 400
-
-#     class_ref = (
-#         firestore_client
-#         .collection(college)
-#         .document(faculty)
-#         .collection(subject)
-#         .document(class_id)
-#     )
-
-#     pdf_collections = class_ref.collections()
-#     reports = []
-
-#     for pdf_collection in pdf_collections:
-#         pdf_name = pdf_collection.id
-#         doc = pdf_collection.document("file").get()
-#         if doc.exists:
-#             data = doc.to_dict()
-#             print("doc:",doc)
-#             report_info = {
-#                 "pdf_name": data["pdf_name"],
-#                 "storage_path": data["storage_path"],
-#                 "college": data["college"],
-#                 "faculty": data["faculty"],
-#                 "subject": data["subject"],
-#                 "class": data["class"]
-#             }
-#             reports.append(report_info)
-
-#     return jsonify({"reports": reports})
 
 
 @app.route("/get-my-reports", methods=["GET"])
@@ -553,9 +266,9 @@ def get_my_reports():
     college = request.args.get("college")
     faculty = request.args.get("faculty")
     subject = request.args.get("subject")
-    student_name = request.args.get("student_name")
+    student_id = request.args.get("student_id")  # primary key now
 
-    if not all([college, faculty, subject, student_name]):
+    if not all([college, faculty, subject, student_id]):
         return jsonify({"error": "Missing params"}), 400
 
     subject_ref = (
@@ -567,48 +280,108 @@ def get_my_reports():
 
     reports = []
 
-    # ✅ Loop all class docs
+    # ✅ Loop all classes for this subject
     class_docs = subject_ref.stream()
-
     for class_doc in class_docs:
         class_id = class_doc.id
-
-        # ✅ For each class doc, loop all pdf_name collections
         class_doc_ref = subject_ref.document(class_id)
-        pdf_collections = class_doc_ref.collections()
 
-        for pdf_collection in pdf_collections:
-            pdf_name = pdf_collection.id
-            file_doc = pdf_collection.document("file").get()
-            if file_doc.exists:
-                data = file_doc.to_dict()
-                if data.get("student_name") == student_name:
-                    reports.append({
-                        "pdf_name": data.get("pdf_name"),
-                        "storage_path": data.get("storage_path"),
-                        "college": college,
-                        "faculty": faculty,
-                        "subject": subject,
-                        "class": class_id
-                    })
+        # ✅ Fetch all reports from the student's subcollection
+        student_coll_ref = class_doc_ref.collection(student_id)
+        for report_doc in student_coll_ref.stream():
+            data = report_doc.to_dict() or {}
+            reports.append({
+                "pdf_name": data.get("pdf_name"),
+                "storage_path": data.get("storage_path"),
+                "college": data.get("college"),
+                "faculty": data.get("faculty"),
+                "subject": data.get("subject"),
+                "class": data.get("class"),
+                "marks": 0  # default marks, will be updated if found
+            })
+
+        # ✅ Fetch marks for this class
+        marks_doc_ref = (
+            firestore_client
+            .collection("marks")
+            .document(college)
+            .collection(faculty)
+            .document(subject)
+            .collection(class_id)
+            .document("marks")
+        )
+        marks_snap = marks_doc_ref.get()
+        marks_data = marks_snap.to_dict() if marks_snap.exists else {}
+
+        # Fallback path without subject
+        if not marks_data:
+            fallback_marks_ref = (
+                firestore_client
+                .collection("marks")
+                .document(college)
+                .collection(faculty)
+                .document(class_id)
+                .collection("_")
+                .document("marks")
+            )
+            fb = fallback_marks_ref.get()
+            if fb.exists:
+                marks_data = fb.to_dict()
+
+        # ✅ Update marks if found
+        if marks_data and student_id in marks_data:
+            for r in reports:
+                if r["class"] == class_id:
+                    r["marks"] = marks_data[student_id].get("marks", 0)
 
     return jsonify({"reports": reports})
 
 
-@app.route("/debug-classes", methods=["GET"])
-def debug_classes():
-    college = request.args.get("college")
-    faculty = request.args.get("faculty")
-    subject = request.args.get("subject")
+# @app.route("/get-my-reports", methods=["GET"])
+# def get_my_reports():
+#     college = request.args.get("college")
+#     faculty = request.args.get("faculty")
+#     subject = request.args.get("subject")
+#     student_name = request.args.get("student_name")
 
-    subject_ref = firestore_client.collection(college).document(faculty).collection(subject)
-    class_docs = subject_ref.stream()
+#     if not all([college, faculty, subject, student_name]):
+#         return jsonify({"error": "Missing params"}), 400
 
-    out = []
-    for doc in class_docs:
-        out.append(doc.id)
+#     subject_ref = (
+#         firestore_client
+#         .collection(college)
+#         .document(faculty)
+#         .collection(subject)
+#     )
 
-    return jsonify({"classes": out})
+#     reports = []
+
+#     # ✅ Loop all class docs
+#     class_docs = subject_ref.stream()
+
+#     for class_doc in class_docs:
+#         class_id = class_doc.id
+
+#         # ✅ For each class doc, loop all pdf_name collections
+#         class_doc_ref = subject_ref.document(class_id)
+#         pdf_collections = class_doc_ref.collections()
+
+#         for pdf_collection in pdf_collections:
+#             pdf_name = pdf_collection.id
+#             file_doc = pdf_collection.document("file").get()
+#             if file_doc.exists:
+#                 data = file_doc.to_dict()
+#                 if data.get("student_name") == student_name:
+#                     reports.append({
+#                         "pdf_name": data.get("pdf_name"),
+#                         "storage_path": data.get("storage_path"),
+#                         "college": college,
+#                         "faculty": faculty,
+#                         "subject": subject,
+#                         "class": class_id
+#                     })
+
+#     return jsonify({"reports": reports})
 
 
 
@@ -679,65 +452,173 @@ def get_signed_url():
 
     return jsonify({"signed_url": signed_url})
 
-# ✅ User signup (same)
+
+
+# Initialize Firestore (do this once at app startup)
+# cred = credentials.Certificate("serviceAccountKey.json")
+# firebase_admin.initialize_app(cred)
+# db = firestore.client()
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 @app.route("/signup", methods=["POST"])
 def signup():
-    data = request.json
-    name = data.get("name")
-    password = data.get("password")
-    role = data.get("role")
-    institute = data.get("institute")
+    try:
+        data = request.get_json()
+        institute = data.get("institute")
+        role = data.get("role")
+        print("recived data in signup:",data)
 
-    if not all([name, password, role, institute]):
-        return jsonify({"error": "Missing fields"}), 400
+        if not institute or not role:
+            return jsonify({"success": False, "message": "Institute and role are required"}), 400
 
-    role = role.lower()
-    if role not in ["teacher", "student"]:
-        return jsonify({"error": "Invalid role"}), 400
+        collection_path = f"institutes/{institute}/{role}s"
 
-    collection_path = f"institutes/{institute}/{role}s"
-    user_ref = firestore_client.collection(collection_path).document(name)
+        if role == "student":
+            roll_number = data.get("roll_number")
+            name = data.get("name")
+            email = data.get("email")
+            password = data.get("password")
 
-    if user_ref.get().exists:
-        return jsonify({"error": "User already exists"}), 400
+            if not all([roll_number, name, email, password]):
+                return jsonify({"success": False, "message": "Missing student details"}), 400
 
-    user_ref.set({
-        "name": name,
-        "password": password,
-        "role": role,
-        "institute": institute
-    })
+            doc_ref = firestore_client.collection(collection_path).document(roll_number)
+            if doc_ref.get().exists:
+                return jsonify({"success": False, "message": "Student already exists"}), 400
 
-    return jsonify({"message": "Signup successful"}), 200
+            doc_ref.set({
+                "student_id": roll_number,
+                "name": name,
+                "email": email,
+                "password": hash_password(password)
+            })
 
-# ✅ User login (same)
+        elif role == "teacher":
+            email = data.get("email")
+            password = data.get("password")
+
+            if not all([email, password]):
+                return jsonify({"success": False, "message": "Missing teacher details"}), 400
+
+            query = firestore_client.collection(collection_path).where("email", "==", email).get()
+            if query:
+                return jsonify({"success": False, "message": "Teacher already exists"}), 400
+
+            firestore_client.collection(collection_path).add({
+                "email": email,
+                "password": hash_password(password)
+            })
+
+        else:
+            return jsonify({"success": False, "message": "Invalid role"}), 400
+
+        return jsonify({"success": True, "message": f"{role.capitalize()} signup successful"})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route("/login", methods=["POST"])
 def login():
     data = request.json
-    name = data.get("name")
-    password = data.get("password")
-    role = data.get("role")
     institute = data.get("institute")
-
-    if not all([name, password, role, institute]):
-        return jsonify({"error": "Missing fields"}), 400
-
-    role = role.lower()
-    if role not in ["teacher", "student"]:
-        return jsonify({"error": "Invalid role"}), 400
+    role = data.get("role")
+    email_or_roll = data.get("email_or_roll")
+    password = data.get("password")
 
     collection_path = f"institutes/{institute}/{role}s"
-    user_ref = firestore_client.collection(collection_path).document(name)
-    doc = user_ref.get()
+    password_hash = hash_password(password)
 
-    if not doc.exists:
-        return jsonify({"error": "User not found"}), 404
+    if role == "student":
+        doc = firestore_client.collection(collection_path).document(email_or_roll).get()
+        if not doc.exists:
+            return jsonify({"success": False, "message": "Student not found"})
+        student_data = doc.to_dict()
+        if student_data["password"] == password_hash:
+            # ✅ include student_name
+            return jsonify({"success": True, "data": {"student_id": email_or_roll, "name": student_data["name"], "institute": institute}})
+        else:
+            return jsonify({"success": False, "message": "Incorrect password"})
 
-    user_data = doc.to_dict()
-    if user_data["password"] != password:
-        return jsonify({"error": "Incorrect password"}), 401
+    elif role == "teacher":
+        query = firestore_client.collection(collection_path).where("email", "==", email_or_roll).get()
+        if not query:
+            return jsonify({"success": False, "message": "Teacher not found"})
+        teacher_data = query[0].to_dict()
+        if teacher_data["password"] == password_hash:
+            return jsonify({"success": True, "data": {"email": email_or_roll, "institute": institute}})
+        else:
+            return jsonify({"success": False, "message": "Incorrect password"})
 
-    return jsonify({"message": "Login successful"}), 200
+
+# Example usage:
+# signup_user("NIT_Hamirpur", "student", roll_number="CS101", name="Raghvendra", email="raghu@example.com", password="12345")
+# signup_user("NIT_Hamirpur", "teacher", email="teacher@example.com", password="abcd")
+
+# login_user("NIT_Hamirpur", "student", "CS101", "12345")
+# login_user("NIT_Hamirpur", "teacher", "teacher@example.com", "abcd")
+
+
+# # ✅ User signup (same)
+# @app.route("/signup", methods=["POST"])
+# def signup():
+#     data = request.json
+#     name = data.get("name")
+#     password = data.get("password")
+#     role = data.get("role")
+#     institute = data.get("institute")
+
+#     if not all([name, password, role, institute]):
+#         return jsonify({"error": "Missing fields"}), 400
+
+#     role = role.lower()
+#     if role not in ["teacher", "student"]:
+#         return jsonify({"error": "Invalid role"}), 400
+
+#     collection_path = f"institutes/{institute}/{role}s"
+#     user_ref = firestore_client.collection(collection_path).document(name)
+
+#     if user_ref.get().exists:
+#         return jsonify({"error": "User already exists"}), 400
+
+#     user_ref.set({
+#         "name": name,
+#         "password": password,
+#         "role": role,
+#         "institute": institute
+#     })
+
+#     return jsonify({"message": "Signup successful"}), 200
+
+# # ✅ User login (same)
+# @app.route("/login", methods=["POST"])
+# def login():
+#     data = request.json
+#     name = data.get("name")
+#     password = data.get("password")
+#     role = data.get("role")
+#     institute = data.get("institute")
+
+#     if not all([name, password, role, institute]):
+#         return jsonify({"error": "Missing fields"}), 400
+
+#     role = role.lower()
+#     if role not in ["teacher", "student"]:
+#         return jsonify({"error": "Invalid role"}), 400
+
+#     collection_path = f"institutes/{institute}/{role}s"
+#     user_ref = firestore_client.collection(collection_path).document(name)
+#     doc = user_ref.get()
+
+#     if not doc.exists:
+#         return jsonify({"error": "User not found"}), 404
+
+#     user_data = doc.to_dict()
+#     if user_data["password"] != password:
+#         return jsonify({"error": "Incorrect password"}), 401
+
+#     return jsonify({"message": "Login successful"}), 200
 
 
 # Teacher posts a question
@@ -956,6 +837,5 @@ if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5005, debug=True)
 
     # app.run(host="0.0.0.0", port=5005)
-
 
 

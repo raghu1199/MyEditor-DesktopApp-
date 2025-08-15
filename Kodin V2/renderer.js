@@ -35,6 +35,7 @@ class CodeEditorApp {
 
   constructor() {
     this.initTopbar();
+    this.showToast("");
     
     this.tabs = [];  // For multi-tab
     this.activeTabIndex = -1;
@@ -502,7 +503,6 @@ async viewMySubmissions() {
         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View My Submissions</h2>
 
-            
             <label class="block mb-2 font-medium">Faculty:</label>
             <input type="text" id="faculty" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
 
@@ -519,23 +519,25 @@ async viewMySubmissions() {
     document.getElementById("closeModalBtn").onclick = () => modal.remove();
 
     document.getElementById("loadReportsBtn").onclick = async () => {
-        const college = this.user.institute;//document.getElementById("college").value.trim();
+        const college = this.user.institute;
         const faculty = document.getElementById("faculty").value.trim();
         const subject = document.getElementById("subject").value.trim();
-        const student_name = this.user.name || "Unknown";  // make sure current user is set
+        const student_id = this.user.id; // ✅ using student_id now
 
-        if (!college || !faculty || !subject || !student_name) {
+        if (!college || !faculty || !subject || !student_id) {
             this.showToast("Please fill all fields.");
             return;
         }
 
         try {
-            const res = await fetch(`${this.base_server}/get-my-reports?college=${college}&faculty=${faculty}&subject=${subject}&student_name=${student_name}`);
+            const res = await fetch(
+                `${this.base_server}/get-my-reports?college=${college}&faculty=${faculty}&subject=${subject}&student_id=${student_id}`
+            );
             const data = await res.json();
             const reports = data.reports || [];
 
             modal.remove(); // remove the input modal
-            this.showReportViewerModal(subject, reports, college, faculty, student_name); // show next one
+            this.showReportViewerModal(subject, reports, college, faculty, student_id);
         } catch (err) {
             this.showToast("Failed to load reports.");
             console.error(err);
@@ -543,19 +545,25 @@ async viewMySubmissions() {
     };
 }
 
-showReportViewerModal(subject, reports, college, faculty, student_name) {
+showReportViewerModal(subject, reports, college, faculty, student_id) {
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
 
-    const reportCards = reports.map((r, i) => `
-        <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700 flex justify-between items-center">
-            <span class="text-[#61dafb] font-semibold">${r.pdf_name || 'Unnamed PDF'}</span>
-            <button 
-              class="download-btn bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1] font-semibold" 
-              data-path="${r.storage_path}"
-            >
-              Download
-            </button>
+    const reportCards = reports.map((r) => `
+        <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
+            <div class="flex flex-col">
+                <span class="text-[#61dafb] font-semibold">${r.pdf_name || 'Unnamed PDF'}</span>
+                <span class="text-gray-300 text-sm mt-1">Class: ${r.class || 'N/A'}</span>
+                <span class="text-gray-300 text-sm">Marks: ${r.marks ?? 0}</span>
+            </div>
+            <div class="mt-3 flex justify-end">
+                <button 
+                    class="download-btn bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1] font-semibold" 
+                    data-path="${r.storage_path}"
+                >
+                    Download
+                </button>
+            </div>
         </div>
     `).join("");
 
@@ -576,17 +584,14 @@ showReportViewerModal(subject, reports, college, faculty, student_name) {
     `;
     document.body.appendChild(modal);
 
-    // Close button
     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
 
-    // Bind download buttons to class method
     const downloadButtons = modal.querySelectorAll(".download-btn");
     downloadButtons.forEach(btn => {
         const path = btn.dataset.path;
-        btn.onclick = () => this.downloadReport(path); // ✅ class method used here
+        btn.onclick = () => this.downloadReport(path);
     });
 
-    // Merge reports
     if (reports.length > 0) {
         modal.querySelector("#mergeReportsBtn").onclick = async () => {
             const payload = {
@@ -595,7 +600,7 @@ showReportViewerModal(subject, reports, college, faculty, student_name) {
                 college,
                 faculty,
                 subject,
-                student_name
+                student_id
             };
             try {
                 const res = await fetch(`${this.base_server}/merge-reports`, {
@@ -606,8 +611,7 @@ showReportViewerModal(subject, reports, college, faculty, student_name) {
                 const result = await res.json();
                 if (result.signed_url) {
                     window.open(result.signed_url, "_blank");
-                    
-                    this.showToast("✅Final Report generated and Uploaded to respective subject.");
+                    this.showToast("✅ Final Report generated and uploaded.");
                 } else {
                     this.showToast("Failed to generate final report.");
                 }
@@ -618,6 +622,133 @@ showReportViewerModal(subject, reports, college, faculty, student_name) {
         };
     }
 }
+
+
+
+// async viewMySubmissions() {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View My Submissions</h2>
+
+            
+//             <label class="block mb-2 font-medium">Faculty:</label>
+//             <input type="text" id="faculty" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+//             <label class="block mb-2 font-medium">Subject:</label>
+//             <input type="text" id="subject" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+//             <button id="loadReportsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Load My Reports</button>
+
+//             <button id="closeModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     document.getElementById("closeModalBtn").onclick = () => modal.remove();
+
+//     document.getElementById("loadReportsBtn").onclick = async () => {
+//         const college = this.user.institute;//document.getElementById("college").value.trim();
+//         const faculty = document.getElementById("faculty").value.trim();
+//         const subject = document.getElementById("subject").value.trim();
+//         const student_name = this.user.name || "Unknown";  // make sure current user is set
+
+//         if (!college || !faculty || !subject || !student_name) {
+//             this.showToast("Please fill all fields.");
+//             return;
+//         }
+
+//         try {
+//             const res = await fetch(`${this.base_server}/get-my-reports?college=${college}&faculty=${faculty}&subject=${subject}&student_name=${student_name}`);
+//             const data = await res.json();
+//             const reports = data.reports || [];
+
+//             modal.remove(); // remove the input modal
+//             this.showReportViewerModal(subject, reports, college, faculty, student_name); // show next one
+//         } catch (err) {
+//             this.showToast("Failed to load reports.");
+//             console.error(err);
+//         }
+//     };
+// }
+
+// showReportViewerModal(subject, reports, college, faculty, student_name) {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+
+//     const reportCards = reports.map((r, i) => `
+//         <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700 flex justify-between items-center">
+//             <span class="text-[#61dafb] font-semibold">${r.pdf_name || 'Unnamed PDF'}</span>
+//             <button 
+//               class="download-btn bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1] font-semibold" 
+//               data-path="${r.storage_path}"
+//             >
+//               Download
+//             </button>
+//         </div>
+//     `).join("");
+
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-16 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">My Reports for ${subject}</h2>
+
+//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
+
+//             ${reports.length > 0 ? `
+//                 <button id="mergeReportsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1] mt-6">
+//                     Generate Final Report
+//                 </button>
+//             ` : ''}
+
+//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     // Close button
+//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
+
+//     // Bind download buttons to class method
+//     const downloadButtons = modal.querySelectorAll(".download-btn");
+//     downloadButtons.forEach(btn => {
+//         const path = btn.dataset.path;
+//         btn.onclick = () => this.downloadReport(path); // ✅ class method used here
+//     });
+
+//     // Merge reports
+//     if (reports.length > 0) {
+//         modal.querySelector("#mergeReportsBtn").onclick = async () => {
+//             const payload = {
+//                 storage_paths: reports.map(r => r.storage_path),
+//                 output_name: "final_report",
+//                 college,
+//                 faculty,
+//                 subject,
+//                 student_name
+//             };
+//             try {
+//                 const res = await fetch(`${this.base_server}/merge-reports`, {
+//                     method: "POST",
+//                     headers: { "Content-Type": "application/json" },
+//                     body: JSON.stringify(payload)
+//                 });
+//                 const result = await res.json();
+//                 if (result.signed_url) {
+//                     window.open(result.signed_url, "_blank");
+                    
+//                     this.showToast("✅Final Report generated and Uploaded to respective subject.");
+//                 } else {
+//                     this.showToast("Failed to generate final report.");
+//                 }
+//             } catch (err) {
+//                 this.showToast("Error merging reports.");
+//                 console.error(err);
+//             }
+//         };
+//     }
+// }
+
 async downloadReport(path) {
     try {
         const res = await fetch(`${this.base_server}/get-signed-url`, {
@@ -965,190 +1096,6 @@ async generateMarksReport() {
 
 
 
-// async viewClassSubmissions() {
-//     const modal = document.createElement("div");
-//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
-//     modal.innerHTML = `
-//         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
-//             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View Class Submissions</h2>
-
-            
-
-//             <label class="block mb-2 font-medium">Subject:</label>
-//             <input type="text" id="subject" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
-
-//             <label class="block mb-2 font-medium">Class:</label>
-//             <input type="text" id="classId" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
-
-//             <button id="loadClassReportsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Load Class Reports</button>
-
-//             <button id="closeModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
-//         </div>
-//     `;
-//     document.body.appendChild(modal);
-
-//     modal.querySelector("#closeModalBtn").onclick = () => modal.remove();
-
-//     modal.querySelector("#loadClassReportsBtn").onclick = async () => {
-//         const college = this.user.institute;
-//         const faculty = this.user.id;//document.getElementById("faculty").value.trim();
-//         const subject = document.getElementById("subject").value.trim();
-//         const classId = document.getElementById("classId").value.trim();
-
-//         if (!college || !faculty || !subject || !classId) {
-//             this.showToast("Please fill all fields.");
-//             return;
-//         }
-
-//         try {
-//             const res = await fetch(`${this.base_server}/get-reports?college=${college}&faculty=${faculty}&subject=${subject}&class=${classId}`);
-
-//             const data = await res.json();
-//             const reports = data.reports || [];
-
-//             modal.remove(); // Close input modal
-//             this.showClassReportViewerModal(subject, reports, college, faculty, classId); // Open viewer
-//         } catch (err) {
-//             this.showToast("Failed to load class reports.");
-//             console.error(err);
-//         }
-//     };
-// }
-// showClassReportViewerModal(subject, reports, college, faculty, classId) {
-//     const modal = document.createElement("div");
-//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
-
-//     const reportCards = reports.map((r) => `
-//         <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700 flex justify-between items-center">
-//             <div>
-//                 <p class="text-[#61dafb] font-semibold">${r.pdf_name || 'Unnamed PDF'}</p>
-//                 <p class="text-gray-400 text-sm">
-//                     Student: ${r.student_name || 'Unknown'} 
-//                     <span class="text-gray-500 text-xs">(ID: ${r.student_id || 'N/A'})</span>
-//                 </p>
-//             </div>
-//             <div class="flex items-center gap-2">
-//                 <button 
-//                     class="download-btn bg-[#61dafb] text-black px-3 py-1 rounded hover:bg-[#21a1f1] font-semibold" 
-//                     data-path="${r.storage_path}">
-//                     Download
-//                 </button>
-//                 <input 
-//                     type="number" 
-//                     min="0" max="100" 
-//                     class="marks-input w-16 p-1 rounded bg-[#444] border border-gray-600 text-white text-center" 
-//                     data-student-id="${r.student_id}" 
-//                     placeholder="Marks" 
-//                     value="${r.marks || ''}"
-//                 />
-//             </div>
-//         </div>
-//     `).join("");
-
-//     modal.innerHTML = `
-//         <div class="bg-[#333333] rounded-lg mt-16 w-[650px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
-//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject}-${classId}</h2>
-
-//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
-
-//             ${reports.length > 0 ? `
-//             <button id="updateMarksBtn" class="mt-4 w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">
-//                 Update Marks
-//             </button>` : ""}
-
-//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
-//         </div>
-//     `;
-//     document.body.appendChild(modal);
-
-//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
-
-//     // Download handlers
-//     modal.querySelectorAll(".download-btn").forEach(btn => {
-//         const path = btn.dataset.path;
-//         btn.onclick = () => this.downloadReport(path);
-//     });
-
-//     // Update marks handler
-//     const updateBtn = modal.querySelector("#updateMarksBtn");
-//     if (updateBtn) {
-//         updateBtn.onclick = async () => {
-//             const marksData = [];
-//             modal.querySelectorAll(".marks-input").forEach(input => {
-//                 marksData.push({
-//                     student_id: input.dataset.studentId, // ✅ use ID now
-//                     marks: input.value
-//                 });
-//             });
-
-//             try {
-//                 const res = await fetch(`${this.base_server}/update-marks`, {
-//                     method: "POST",
-//                     headers: { "Content-Type": "application/json" },
-//                     body: JSON.stringify({
-//                         college,
-//                         faculty,
-//                         subject,
-//                         classId,
-//                         marksData
-//                     })
-//                 });
-//                 const data = await res.json();
-//                 this.showToast(data.message || "Marks updated successfully");
-//             } catch (err) {
-//                 console.error(err);
-//                 this.showToast("Failed to update marks.");
-//             }
-//         };
-//     }
-// }
-
-
-
-// showClassReportViewerModal(subject, reports, college, faculty, classId) {
-//     const modal = document.createElement("div");
-//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
-
-//     const reportCards = reports.map((r, i) => `
-//         <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
-//             <div class="flex justify-between items-center">
-//                 <div>
-//                     <p class="text-[#61dafb] font-semibold">${r.pdf_name || 'Unnamed PDF'}</p>
-//                     <p class="text-gray-400 text-sm">Student: ${r.student_name || 'Unknown'}</p>
-//                 </div>
-//                 <button 
-//                     class="download-btn bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1] font-semibold" 
-//                     data-path="${r.storage_path}">
-//                     Download
-//                 </button>
-//             </div>
-//         </div>
-//     `).join("");
-
-//     modal.innerHTML = `
-//         <div class="bg-[#333333] rounded-lg mt-16 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
-//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject}-${classId}</h2>
-
-//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
-
-            
-//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
-//         </div>
-//     `;
-//     document.body.appendChild(modal);
-
-//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
-
-//     // Bind all download buttons
-//     const downloadButtons = modal.querySelectorAll(".download-btn");
-//     downloadButtons.forEach(btn => {
-//         const path = btn.dataset.path;
-//         btn.onclick = () => this.downloadReport(path);
-//     });
-
-//     // Optional merge for all class submissions
-    
-// }
 
 
 
@@ -1349,34 +1296,37 @@ async showUploadSessionModal() {
     document.getElementById('editorActions').classList.toggle('hidden', !show);
   }
 
+
   showWelcomePage() {
-    this.toggleEditorActions(false);
-    const app = document.getElementById('app');
-    app.classList.remove('hidden');
-    document.getElementById('editorLayout').classList.add('hidden');
+  this.toggleEditorActions(false);
+  const app = document.getElementById('app');
+  app.classList.remove('hidden');
+  document.getElementById('editorLayout').classList.add('hidden');
 
-    app.innerHTML = `
-      <div class="h-full w-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950 px-4">
-        <h1 class="text-6xl font-extrabold mb-14 text-white">Welcome to <span class="text-teal-400">Kodin</span></h1>
-        <div class="flex flex-col space-y-6 w-full max-w-xs">
-          ${this.button('Student', 'student')}
-          ${this.button('Teacher', 'teacher')}
-          ${this.button('Proceed as Guest', 'guest')}
-        </div>
+  app.innerHTML = `
+    <div class="h-full w-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950 px-4">
+      <h1 class="text-6xl font-extrabold mb-14 text-white">Welcome to <span class="text-teal-400">Kodin</span></h1>
+      <div class="flex flex-col space-y-6 w-full max-w-xs">
+        ${this.button('Student', 'student')}
+        ${this.button('Teacher', 'teacher')}
+        ${this.button('Proceed as Guest', 'guest')}
+        ${this.button('Signup', 'signup')}
       </div>
-    `;
+    </div>
+  `;
 
-    document.querySelectorAll('button[data-role]').forEach(btn => {
-      const role = btn.dataset.role;
-      btn.onclick = () => {
-        if (role === 'guest') this.showEditor();
-        else this.showLoginForm(role);
+   
 
-      }; 
-    });
-  }
-  
+  document.querySelectorAll('button[data-role]').forEach(btn => {
+    const role = btn.dataset.role;
+    btn.onclick = () => {
+      if (role === 'guest') this.showEditor();
+      else if (role === 'signup') this.showSignupRoleSelect();
+      else this.showLoginForm(role);
+    }; 
+  });
 
+}
   button(label, role) {
     return `
       <button data-role="${role}" class="w-full py-4 px-8 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-xl font-bold text-white">
@@ -1386,57 +1336,258 @@ async showUploadSessionModal() {
   }
 
 
-  showLoginForm(role) {
-    this.toggleEditorActions(false);
-    const app = document.getElementById('app');
-    this.user.role=role;
-
-    const isStudent = this.user.role.toLowerCase() === "student";
-    const title = `${this.user.role} Login`;
-
-    app.innerHTML = `
-      <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
-        <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
-          <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
-          <form id="loginForm" class="space-y-6">
-            ${this.inputField('Institute', 'text')}
-            ${isStudent 
-              ? this.inputField('Roll Number', 'text') 
-              : this.inputField('Name', 'text')}
-            ${this.inputField('Password', 'password')}
-            <button type="submit"
-              class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
-              Login
-            </button>
-          </form>
-        </div>
+showSignupRoleSelect() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="h-full w-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950 px-4">
+      <h2 class="text-4xl font-extrabold mb-10 text-white">Choose Signup Role</h2>
+      <div class="flex flex-col space-y-6 w-full max-w-xs">
+        ${this.button('Student Signup', 'student-signup')}
+        ${this.button('Teacher Signup', 'teacher-signup')}
+        ${this.button('Back', 'back')}
       </div>
-    `;
+    </div>
+  `;
 
-    document.getElementById('loginForm').onsubmit = e => {
-      e.preventDefault();
+  document.querySelectorAll('button[data-role]').forEach(btn => {
+    const role = btn.dataset.role;
+    if (role === 'student-signup') btn.onclick = () => this.showSignupForm('student');
+    else if (role === 'teacher-signup') btn.onclick = () => this.showSignupForm('teacher');
+    else if (role === 'back') btn.onclick = () => this.showWelcomePage();
+  });
+}
 
-      const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
-      const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
-      let id;
+showSignupForm(role) {
+  this.user.role = role;
+  const isStudent = role === "student";
+  const title = `${role.charAt(0).toUpperCase() + role.slice(1)} Signup`;
 
-      if (isStudent) {
-        id = document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim();
-      } else {
-        id = document.querySelector('#loginForm input[placeholder="Name"]').value.trim();
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+      <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
+        <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
+        <form id="signupForm" class="space-y-6">
+          ${this.inputField('Institute', 'text')}
+          ${isStudent ? this.inputField('Roll Number', 'text') : ''}
+          ${isStudent ? this.inputField('Name', 'text') : ''}
+          ${this.inputField('Email', 'email')}
+          ${this.inputField('Password', 'password')}
+          <button type="submit"
+            class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+            Signup
+          </button>
+        </form>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('signupForm').onsubmit = async e => {
+    e.preventDefault();
+
+    const payload = {
+      institute: document.querySelector('#signupForm input[placeholder="Institute"]').value.trim(),
+      email: document.querySelector('#signupForm input[placeholder="Email"]').value.trim(),
+      password: document.querySelector('#signupForm input[placeholder="Password"]').value.trim(),
+      role
+    };
+
+    if (isStudent) {
+      payload.roll_number = document.querySelector('#signupForm input[placeholder="Roll Number"]').value.trim();
+      payload.name = document.querySelector('#signupForm input[placeholder="Name"]').value.trim();
+    }
+
+    try {
+      const res = await fetch(`${this.base_server}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      console.log("sent payload:",JSON.stringify(payload))
+      const data = await res.json().catch(() => null);
+      console.log("recieved payload:",data)
+
+      
+      if (data.success){
+
+        this.showWelcomePage();
+        this.showToast('✅Signup Completed');
       }
+      else{
+        this.showToast('❌ Student Already Exists');
+      }
+         
+    } catch (err) {
+      console.error(err);
+      this.showToast('❌Signup failed');
+    }
+  };
+}
 
-      // Save user info
-      this.user.id = id;
-      this.user.institute = institute;
+
+
+//   showWelcomePage() {
+//     this.toggleEditorActions(false);
+//     const app = document.getElementById('app');
+//     app.classList.remove('hidden');
+//     document.getElementById('editorLayout').classList.add('hidden');
+
+//     app.innerHTML = `
+//       <div class="h-full w-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950 px-4">
+//         <h1 class="text-6xl font-extrabold mb-14 text-white">Welcome to <span class="text-teal-400">Kodin</span></h1>
+//         <div class="flex flex-col space-y-6 w-full max-w-xs">
+//           ${this.button('Student', 'student')}
+//           ${this.button('Teacher', 'teacher')}
+//           ${this.button('Proceed as Guest', 'guest')}
+//         </div>
+//       </div>
+//     `;
+
+//     document.querySelectorAll('button[data-role]').forEach(btn => {
+//       const role = btn.dataset.role;
+//       btn.onclick = () => {
+//         if (role === 'guest') this.showEditor();
+//         else this.showLoginForm(role);
+
+//       }; 
+//     });
+//   }
+  
+
+  // button(label, role) {
+  //   return `
+  //     <button data-role="${role}" class="w-full py-4 px-8 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-xl font-bold text-white">
+  //       ${label}
+  //     </button>
+  //   `;
+  // }
+
+
+//   showLoginForm(role) {
+//     this.toggleEditorActions(false);
+//     const app = document.getElementById('app');
+//     this.user.role=role;
+
+//     const isStudent = this.user.role.toLowerCase() === "student";
+//     const title = `${this.user.role} Login`;
+
+//     app.innerHTML = `
+//       <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+//         <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
+//           <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
+//           <form id="loginForm" class="space-y-6">
+//             ${this.inputField('Institute', 'text')}
+//             ${isStudent 
+//               ? this.inputField('Roll Number', 'text') 
+//               : this.inputField('Name', 'text')}
+//             ${this.inputField('Password', 'password')}
+//             <button type="submit"
+//               class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+//               Login
+//             </button>
+//           </form>
+//         </div>
+//       </div>
+//     `;
+
+//     document.getElementById('loginForm').onsubmit = e => {
+//       e.preventDefault();
+
+//       const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
+//       const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
+//       let id;
+
+//       if (isStudent) {
+//         id = document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim();
+//       } else {
+//         id = document.querySelector('#loginForm input[placeholder="Name"]').value.trim();
+//       }
+
+//       // Save user info
+//       this.user.id = id;
+//       this.user.institute = institute;
 
       
 
 
-      // Validation or authentication logic can go here
+//       // Validation or authentication logic can go here
 
-      this.showEditor();
-    };
+//       this.showEditor();
+//     };
+// }
+showLoginForm(role) {
+  this.user.role = role;
+  const isStudent = role === "student";
+  const title = `${role.charAt(0).toUpperCase() + role.slice(1)} Login`;
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+  <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+    <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
+      <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
+      <form id="loginForm" class="space-y-6">
+        ${this.inputField('Institute', 'text')}
+        ${isStudent ? this.inputField('Roll Number', 'text') : this.inputField('Email', 'email')}
+        ${this.inputField('Password', 'password')}
+        <button type="submit"
+          class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+          Login
+        </button>
+        <button type="button" id="backBtn"
+          class="w-full py-4 px-6 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
+          Back
+        </button>
+      </form>
+    </div>
+  </div>
+`;
+
+  // Bind Back button
+  document.getElementById('backBtn').onclick = () => this.showWelcomePage();
+
+  document.getElementById('loginForm').onsubmit = async e => {
+    e.preventDefault();
+
+    const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
+    const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
+    const email_or_roll="";
+    // let payload = { institute, password, role };
+
+          const payload = {
+        institute,
+        role,
+        email_or_roll: isStudent
+          ? document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim()
+          : document.querySelector('#loginForm input[placeholder="Email"]').value.trim(),
+        password
+      };
+
+
+    try {
+      const res = await fetch(`${this.base_server}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      console.log("sent payload:", JSON.stringify(payload));
+      const data = await res.json().catch(() => null);
+      console.log("received payload:", data);
+
+      if (data?.success) {
+        this.user.id = email_or_roll;
+        this.user.institute = institute;
+        if (role === "student") this.user.name = data.data.name; // ✅ store student_name
+        this.showEditor();
+        this.showToast('✅ Login successful');
+      } else {
+        this.showToast(`❌ ${data?.message || 'Login failed'}`);
+      }
+
+    } catch (err) {
+      console.error(err);
+      this.showToast('❌ Login failed');
+    }
+  };
 }
 
 
@@ -2240,20 +2391,7 @@ async runCode() {
     }
 
     if (extension === 'java') {
-      // append('🔧 Compiling Java...\n');
-      // const compileResult = await window.electronAPI.runCommandStream(execName, args);
-      // if (compileResult.code !== 0) {
-      //   append('\n❌ javac error:\n' + compileResult.stderr);
-      //   return;
-      // }
-      // append('\n✅ javac finished. Running...\n');
-
-      // // find classname (simple heuristic: file name without extension)
-      // const classname = fileName.replace(/\.java$/i, '');
-      // const javaRunner = appTools.java || 'java';
-      // const runResult = await window.electronAPI.runCommandStream(javaRunner, ['-cp', require('path').dirname(currentTab.filePath), classname]);
-      // append('\n' + (runResult.stdout || '') + (runResult.stderr || ''));
-      // return;
+      
 
 
             append('🔧 Compiling Java...\n');
