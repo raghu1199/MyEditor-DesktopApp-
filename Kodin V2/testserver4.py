@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify,send_file
 from flask_cors import CORS
 from google.cloud import storage, firestore
 from datetime import timedelta
@@ -6,6 +6,9 @@ import os
 from PyPDF2 import PdfMerger  # pip install PyPDF2
 import tempfile
 from io import BytesIO
+import pandas as pd
+
+
 
 
 
@@ -171,6 +174,257 @@ def get_reports():
                 r["marks"] = marks_data[sid].get("marks", "")
 
     return jsonify({"reports": reports})
+
+
+
+
+@app.route("/generate_marks_excel", methods=["POST"])
+def generate_marks_excel():
+    try:
+        data = request.json or {}
+        college = data.get("college")
+        faculty = data.get("faculty")
+        subject = data.get("subject")
+
+        if not all([college, faculty, subject]):
+            return jsonify({"error": "Missing parameters"}), 400
+
+        # Step 1: Get all class IDs under the subject
+        subject_ref = (
+            firestore_client
+            .collection("marks")
+            .document(college)
+            .collection(faculty)
+            .document(subject)
+        )
+
+        class_ids = sorted([cls.id for cls in subject_ref.collections()])
+        print("Class IDs found:", class_ids)
+
+        # Step 2: Prepare student data
+        student_data = {}
+        for class_id in class_ids:
+            marks_doc_ref = (
+                firestore_client
+                .collection("marks")
+                .document(college)
+                .collection(faculty)
+                .document(subject)
+                .collection(class_id)
+                .document("marks")
+            )
+            marks_doc = marks_doc_ref.get()
+            if marks_doc.exists:
+                marks_dict = marks_doc.to_dict()
+                for student_id, info in marks_dict.items():
+                    student_name = info.get("name", "")
+                    marks = info.get("marks", "")
+
+                    if student_id not in student_data:
+                        student_data[student_id] = {"name": student_name}
+
+                    # Store marks under the specific class ID column
+                    student_data[student_id][class_id] = marks
+
+        # Step 3: Build DataFrame
+        sorted_student_ids = sorted(student_data.keys())
+        columns = ["StudentID", "StudentName"] + class_ids
+        rows = []
+
+        for sid in sorted_student_ids:
+            row = [sid, student_data[sid].get("name", "")]
+            for cid in class_ids:
+                row.append(student_data[sid].get(cid, ""))
+            rows.append(row)
+
+        df = pd.DataFrame(rows, columns=columns)
+        print("Final DataFrame rows:", rows)
+
+        # Step 4: Save to in-memory buffer
+        output = BytesIO()
+        df.to_excel(output, index=False)
+        output.seek(0)
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"{subject}_marks.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    except Exception as e:
+        print("Error generating Excel:", e)
+        return jsonify({"error": str(e)}), 500
+
+
+# @app.route("/generate_marks_excel", methods=["POST"])
+# def generate_marks_excel():
+#     try:
+#         data = request.json or {}
+#         college = data.get("college")
+#         faculty = data.get("faculty")
+#         subject = data.get("subject")
+
+#         if not all([college, faculty, subject]):
+#             return jsonify({"error": "Missing parameters"}), 400
+
+#         # Step 1: Get all class IDs under the subject
+#         subject_ref = (
+#             firestore_client
+#             .collection("marks")
+#             .document(college)
+#             .collection(faculty)
+#             .document(subject)
+#         )
+
+#         class_ids = sorted([cls.id for cls in subject_ref.collections()])
+#         print("recived",data)
+#         print("subject ref:",subject_ref)
+#         print("class_ids:",class_ids)
+#         # Step 2: Prepare student data
+#         student_data = {}
+#         for class_id in class_ids:
+#             marks_doc_ref = (
+#                 firestore_client
+#                 .collection("marks")
+#                 .document(college)
+#                 .collection(faculty)
+#                 .document(subject)
+#                 .collection(class_id)
+#                 .document("marks")
+#             )
+#             marks_doc = marks_doc_ref.get()
+#             if marks_doc.exists:
+#                 for student_id, info in marks_doc.to_dict().items():
+#                     name = info.get("name", "")
+#                     marks = info.get("marks", "")
+#                     if student_id not in student_data:
+#                         student_data[student_id] = {"name": name}
+#                     student_data[student_id][class_id] = marks
+
+#         # Step 3: Build DataFrame
+#         sorted_student_ids = sorted(student_data.keys())
+#         print("sorted:",sorted_student_ids)
+#         columns = ["StudentID", "StudentName"] + class_ids
+#         rows = []
+#         for sid in sorted_student_ids:
+#             row = [sid, student_data[sid].get("name", "")]
+#             for cid in class_ids:
+#                 row.append(student_data[sid].get(cid, ""))
+#             rows.append(row)
+
+#         df = pd.DataFrame(rows, columns=columns)
+#         print("student pandasL:",rows,columns)
+
+#         # Step 4: Save to in-memory buffer
+#         output = BytesIO()
+#         df.to_excel(output, index=False)
+#         output.seek(0)
+
+#         return send_file(
+#             output,
+#             as_attachment=True,
+#             download_name=f"{subject}_marks.xlsx",
+#             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+#         )
+
+#     except Exception as e:
+#         print("Error generating Excel:", e)
+#         return jsonify({"error": str(e)}), 500
+
+
+# from flask import after_this_request
+# import tempfile, os
+
+# @app.route("/generate_marks_excel", methods=["POST"])
+# def generate_marks_excel():
+#     try:
+#         data = request.json or {}
+#         print("Received:", data)
+#         college = data.get("college")
+#         faculty = data.get("faculty")
+#         subject = data.get("subject")
+
+#         if not all([college, faculty, subject]):
+#             return jsonify({"error": "Missing parameters"}), 400
+
+#         # Step 1: Get all class IDs under the subject
+#         subject_ref = (
+#             firestore_client
+#             .collection("marks")
+#             .document(college)
+#             .collection(faculty)
+#             .document(subject)
+#         )
+
+#         classes = list(subject_ref.collections())
+#         class_ids = sorted([cls.id for cls in classes])  # sort class IDs
+
+#         student_data = {}
+
+#         for class_id in class_ids:
+#             marks_doc_ref = (
+#                 firestore_client
+#                 .collection("marks")
+#                 .document(college)
+#                 .collection(faculty)
+#                 .document(subject)
+#                 .collection(class_id)
+#                 .document("marks")
+#             )
+
+#             marks_doc = marks_doc_ref.get()
+#             if marks_doc.exists:
+#                 marks_data = marks_doc.to_dict()
+#                 for student_id, info in marks_data.items():
+#                     name = info.get("name", "")
+#                     marks = info.get("marks", "")
+
+#                     if student_id not in student_data:
+#                         student_data[student_id] = {"name": name}
+#                     student_data[student_id][class_id] = marks
+
+#         # Build DataFrame
+#         sorted_student_ids = sorted(student_data.keys())
+#         columns = ["StudentID", "StudentName"] + class_ids
+#         rows = []
+
+#         for sid in sorted_student_ids:
+#             row = [sid, student_data[sid].get("name", "")]
+#             for cid in class_ids:
+#                 row.append(student_data[sid].get(cid, ""))
+#             rows.append(row)
+
+#         df = pd.DataFrame(rows, columns=columns)
+
+#         # Write to temporary file
+#         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+#             df.to_excel(tmp.name, index=False)
+#             tmp_path = tmp.name
+
+#         print("temp path:", tmp_path)
+
+#         # Ensure file is deleted after sending
+#         @after_this_request
+#         def remove_file(response):
+#             try:
+#                 os.remove(tmp_path)
+#             except Exception as e:
+#                 print("Error deleting temp file:", e)
+#             return response
+
+#         return send_file(
+#             tmp_path,
+#             as_attachment=True,
+#             download_name=f"{subject}_marks.xlsx",
+#             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+#         )
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+
+
 
 
 # @app.route("/get-reports", methods=["GET"])
@@ -545,11 +799,10 @@ def get_question():
 
 
 
-
 @app.route("/update-marks", methods=["POST"])
 def update_marks():
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         college = data.get("college")
         faculty = data.get("faculty")
         subject = data.get("subject")
@@ -559,19 +812,7 @@ def update_marks():
         if not all([college, faculty, subject, class_id]) or not marks_data:
             return jsonify({"error": "Missing required fields"}), 400
 
-        # ✅ Create the bottom-most doc to ensure hierarchy exists
-        class_doc_ref = (
-            firestore_client
-            .collection("marks")
-            .document(college)
-            .collection(faculty)
-            .document(subject)
-            .collection(class_id)
-            .document("_meta")
-        )
-        class_doc_ref.set({"_created": True}, merge=True)
-
-        # ✅ Now target the actual marks document
+        # Firestore document for storing marks
         marks_doc_ref = (
             firestore_client
             .collection("marks")
@@ -585,9 +826,13 @@ def update_marks():
         updates = {}
         for entry in marks_data:
             student_id = entry.get("student_id")
+            student_name = entry.get("student_name")  # <-- include name
             marks = entry.get("marks")
-            if student_id is not None:
-                updates[student_id] = {"marks": marks}
+            if student_id:
+                updates[student_id] = {
+                    "name": student_name or "",  # store name
+                    "marks": marks
+                }
 
         if updates:
             marks_doc_ref.set(updates, merge=True)
@@ -596,6 +841,58 @@ def update_marks():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# @app.route("/update-marks", methods=["POST"])
+# def update_marks():
+#     try:
+#         data = request.get_json()
+#         college = data.get("college")
+#         faculty = data.get("faculty")
+#         subject = data.get("subject")
+#         class_id = data.get("classId")
+#         marks_data = data.get("marksData", [])
+
+#         if not all([college, faculty, subject, class_id]) or not marks_data:
+#             return jsonify({"error": "Missing required fields"}), 400
+
+#         # ✅ Create the bottom-most doc to ensure hierarchy exists
+#         class_doc_ref = (
+#             firestore_client
+#             .collection("marks")
+#             .document(college)
+#             .collection(faculty)
+#             .document(subject)
+#             .collection(class_id)
+#             .document("_meta")
+#         )
+#         class_doc_ref.set({"_created": True}, merge=True)
+
+#         # ✅ Now target the actual marks document
+#         marks_doc_ref = (
+#             firestore_client
+#             .collection("marks")
+#             .document(college)
+#             .collection(faculty)
+#             .document(subject)
+#             .collection(class_id)
+#             .document("marks")
+#         )
+
+#         updates = {}
+#         for entry in marks_data:
+#             student_id = entry.get("student_id")
+#             marks = entry.get("marks")
+#             if student_id is not None:
+#                 updates[student_id] = {"marks": marks}
+
+#         if updates:
+#             marks_doc_ref.set(updates, merge=True)
+
+#         return jsonify({"message": "Marks updated successfully"}), 200
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/get-class-marks", methods=["GET"])
@@ -656,6 +953,8 @@ def get_class_marks():
 
 # ✅ 5️⃣ Run server
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5005)
+    app.run(host="0.0.0.0", port=5005, debug=True)
+
+    # app.run(host="0.0.0.0", port=5005)
 
 

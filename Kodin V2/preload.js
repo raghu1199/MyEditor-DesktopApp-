@@ -10,7 +10,7 @@ saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePat
   saveAsFile: (content) => ipcRenderer.invoke('file:saveAsFile', content),
   openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
   readFile: (path) => ipcRenderer.invoke('readFile', path), // ✅ Add this
-  // runCommand: (cmd) => ipcRenderer.invoke('run-command', cmd),
+  runCommand: (cmd) => ipcRenderer.invoke('run-command', cmd),
   windowControl: (action) => ipcRenderer.send('window-control', action),
 
   joinPath: (folder, file) => ipcRenderer.invoke('join-path', folder, file),
@@ -30,8 +30,7 @@ saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePat
   createFileInFolder: (data) => ipcRenderer.invoke("create-file-in-folder", data),
   createFolderInFolder: (data) => ipcRenderer.invoke("create-folder-in-folder", data),
 
-
-   runCommand: (cmd, args = []) => ipcRenderer.invoke('run-command', { cmd, args }),
+  runCommand: (cmd, args = []) => ipcRenderer.invoke('run-command', { cmd, args }),
 
   // run command and stream stdout/stderr back. returns final code and buffers
   runCommandStream: (cmd, args = []) => ipcRenderer.invoke('run-command-stream', { cmd, args }),
@@ -41,6 +40,8 @@ saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePat
   getExt: async () => {
     return await ipcRenderer.invoke('getPlatformExt');
   },
+
+  
   exportReport: (openedFiles, currentUser, currentFolder,outputs) => ipcRenderer.invoke('export-report', {
     openedFiles,
     currentUser,
@@ -54,11 +55,6 @@ saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePat
     if (!buffer) throw new Error('Failed to read file.');
     return new Blob([buffer], { type: 'application/pdf' });
   },
-
-  getRemoteConfig: async () => {
-    return await ipcRenderer.invoke('fetch-remote-config');
-
-    }
 });
 
 

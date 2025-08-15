@@ -10,6 +10,11 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 // ✅ Firebase config (public keys only, safe in client apps)
 
+// Initialize
+
+
+
+
 
 // Enable highlighting + line breaks
 marked.setOptions({
@@ -56,6 +61,10 @@ class CodeEditorApp {
     
   }
 
+  
+
+
+
   async loadapi() {
     // ✅ Public Firebase config (safe to expose)
     const firebaseConfig = {
@@ -89,10 +98,10 @@ class CodeEditorApp {
       this.base_llm = config.llm_api;
 
       // Update UI if elements exist
-      const serverApiEl = document.getElementById("serverApi");
-      const llmApiEl = document.getElementById("llmApi");
-      if (serverApiEl) serverApiEl.textContent = config.server_api;
-      if (llmApiEl) llmApiEl.textContent = config.llm_api;
+      // const serverApiEl = document.getElementById("serverApi");
+      // const llmApiEl = document.getElementById("llmApi");
+      // if (serverApiEl) serverApiEl.textContent = config.server_api;
+      // if (llmApiEl) llmApiEl.textContent = config.llm_api;
 
     } catch (err) {
       console.error("❌ Failed to load config:", err);
@@ -122,16 +131,21 @@ initTopbar() {
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="saveFile">Save</div>
           </div>
         </div>
-        <button id="runBtn" class="hover:text-teal-400">Run</button>
+        
         <button id="exportBtn" class="hover:text-teal-400">📤Export</button>
         <button id="getQuestionBtn" class="hover:text-teal-400 hidden">📥 Get Question</button>
         <button id="postQuestionBtn" class="hover:text-teal-400 hidden">📝 Post Question</button>
         <button id="viewMySubmissionsBtn" class="hover:text-teal-400 hidden">📥 My Submissions</button>
+        <button id="runBtn" class="hover:text-teal-400">Run</button>
         <button id="viewClassSubmissionsBtn" class="hover:text-teal-400 hidden">📚 View Class Submissions</button>
-        <button id="copilotToggleFromMenu" class="text-sm hover:text-teal-400">Ask Kodin</button>
+        <button id="generateExcelBtn" class="hover:text-teal-400 hidden">📊 Generate Report</button>
+
+        <button id="copilotToggleFromMenu" class="text-sm hover:text-teal-400">Kodin</button>
 
 
-        <button id="uploadBtn" class="hover:text-teal-400">📤Upload Session</button>
+        
+        <button id="uploadBtn" class="hover:text-teal-400 hidden">📤 Upload Session</button>
+
         <button id="logoutBtn" class="hover:text-red-400">Logout</button>
       </div>
       <!-- USER INFO + WINDOW BUTTONS -->
@@ -164,6 +178,9 @@ initTopbar() {
     getQuestionBtn.onclick = () => {
       this.showQuestionModal();
     };
+
+    
+
 
   fileBtn.onclick = (e) => {
     e.stopPropagation();
@@ -304,9 +321,9 @@ newFileTypeMenu.addEventListener('click', async (e) => {
 };
 
   // upload session
-  document.getElementById('uploadBtn').onclick = () => {
-  this.showUploadSessionModal();
-};
+//   document.getElementById('uploadBtn').onclick = () => {
+  
+// };
 
 
   window.addEventListener('keydown', async (e) => {
@@ -747,9 +764,15 @@ showClassReportViewerModal(subject, reports, college, faculty, classId) {
     if (updateBtn) {
         updateBtn.onclick = async () => {
             const marksData = [];
+            
             modal.querySelectorAll(".marks-input").forEach(input => {
+                const studentId = input.dataset.studentId;
+                const studentReport = reports.find(r => r.student_id === studentId);
+                const studentName = studentReport?.student_name || "";
+
                 marksData.push({
-                    student_id: input.dataset.studentId,
+                    student_id: studentId,
+                    student_name: studentName,
                     marks: input.value
                 });
             });
@@ -774,6 +797,170 @@ showClassReportViewerModal(subject, reports, college, faculty, classId) {
             }
         };
     }
+}
+
+
+// showClassReportViewerModal(subject, reports, college, faculty, classId) {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+
+//     // Group reports by student_id
+//     const grouped = reports.reduce((acc, r) => {
+//         if (!acc[r.student_id]) acc[r.student_id] = [];
+//         acc[r.student_id].push(r);
+//         return acc;
+//     }, {});
+
+//     const reportCards = Object.entries(grouped).map(([studentId, studentReports]) => {
+//         const studentName = studentReports[0]?.student_name || "Unknown";
+//         const pdfList = studentReports.map(r => `
+//             <div class="flex justify-between items-center mt-2">
+//                 <span class="text-sm text-gray-300">${r.pdf_name || 'session.pdf'}</span>
+//                 <button 
+//                     class="download-btn bg-[#61dafb] text-black px-2 py-1 rounded hover:bg-[#21a1f1]" 
+//                     data-path="${r.storage_path}">
+//                     Download
+//                 </button>
+//             </div>
+//         `).join("");
+
+//         return `
+//             <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
+//                 <p class="text-[#61dafb] font-semibold">${studentName}</p>
+//                 <p class="text-gray-400 text-sm">ID: ${studentId}</p>
+//                 ${pdfList}
+//                 <div class="mt-3">
+//                     <input 
+//                         type="number" 
+//                         min="0" max="100" 
+//                         class="marks-input w-20 p-1 rounded bg-[#444] border border-gray-600 text-white text-center" 
+//                         data-student-id="${studentId}" 
+//                         placeholder="Marks"
+//                         value="${studentReports[0]?.marks || ''}"
+//                     />
+//                 </div>
+//             </div>
+//         `;
+//     }).join("");
+
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-16 w-[650px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject} - ${classId}</h2>
+
+//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
+
+//             ${reports.length > 0 ? `
+//             <button id="updateMarksBtn" class="mt-4 w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">
+//                 Update Marks
+//             </button>` : ""}
+
+//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
+
+//     // Download handlers
+//     modal.querySelectorAll(".download-btn").forEach(btn => {
+//         const path = btn.dataset.path;
+//         btn.onclick = () => this.downloadReport(path);
+//     });
+
+//     // Update marks
+//     const updateBtn = modal.querySelector("#updateMarksBtn");
+//     if (updateBtn) {
+//         updateBtn.onclick = async () => {
+//             const marksData = [];
+//             modal.querySelectorAll(".marks-input").forEach(input => {
+//                 marksData.push({
+                    
+//                     student_id: input.dataset.studentId,
+//                     marks: input.value
+//                 });
+//             });
+
+//             try {
+//                 const res = await fetch(`${this.base_server}/update-marks`, {
+//                     method: "POST",
+//                     headers: { "Content-Type": "application/json" },
+//                     body: JSON.stringify({
+//                         college,
+//                         faculty,
+//                         subject,
+//                         classId,
+//                         marksData
+//                     })
+//                 });
+//                 const data = await res.json();
+//                 this.showToast(data.message || "Marks updated successfully");
+//             } catch (err) {
+//                 console.error(err);
+//                 this.showToast("Failed to update marks.");
+//             }
+//         };
+//     }
+// }
+
+
+async generateMarksReport() {
+    const modal = document.createElement("div");
+    modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+
+    modal.innerHTML = `
+        <div class="bg-[#333333] rounded-lg mt-20 w-[500px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+            <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">Generate Marks Report</h2>
+
+            <label class="block mb-2 font-medium">Subject:</label>
+            <input type="text" id="subjectInput" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+            <button id="generateExcelBtn" class="w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">Generate Excel</button>
+
+            <button id="closeModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector("#closeModalBtn").onclick = () => modal.remove();
+
+    modal.querySelector("#generateExcelBtn").onclick = async () => {
+        const subject = document.getElementById("subjectInput").value.trim();
+        const college = this.user.institute;
+        const faculty = this.user.id; // teacher's ID
+
+        if (!college || !faculty || !subject) {
+            this.showToast("Please enter the subject.");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${this.base_server}/generate_marks_excel`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ college, faculty, subject })
+            });
+
+            if (!res.ok) throw new Error("Failed to generate Excel");
+
+            // Blob download
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${subject}_marks.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+            this.showToast("Excel file generated successfully!");
+            modal.remove();
+        } catch (err) {
+            console.error(err);
+            this.showToast("Failed to generate report.");
+        }
+    };
 }
 
 
@@ -1184,6 +1371,7 @@ async showUploadSessionModal() {
       btn.onclick = () => {
         if (role === 'guest') this.showEditor();
         else this.showLoginForm(role);
+
       }; 
     });
   }
@@ -1241,6 +1429,9 @@ async showUploadSessionModal() {
       // Save user info
       this.user.id = id;
       this.user.institute = institute;
+
+      
+
 
       // Validation or authentication logic can go here
 
@@ -1339,6 +1530,22 @@ async showUploadSessionModal() {
     };
 
     this.toggleCopilotPane();
+
+    const gbtn = document.getElementById("generateExcelBtn");
+    if (this.user.role === "teacher") {
+    
+    gbtn.classList.remove("hidden"); // show the button
+    gbtn.onclick = () => this.generateMarksReport();
+    }
+
+
+    const uploadBtn = document.getElementById("uploadBtn");
+    if (this.user.role !== "teacher") {
+    uploadBtn.classList.remove("hidden");
+    uploadBtn.onclick = () => this.showUploadSessionModal();;
+    }
+
+
 
     const copilotToggleBtn = document.getElementById("copilotToggleFromMenu");
       if (copilotToggleBtn) {
@@ -2033,20 +2240,46 @@ async runCode() {
     }
 
     if (extension === 'java') {
-      append('🔧 Compiling Java...\n');
-      const compileResult = await window.electronAPI.runCommandStream(execName, args);
-      if (compileResult.code !== 0) {
-        append('\n❌ javac error:\n' + compileResult.stderr);
-        return;
-      }
-      append('\n✅ javac finished. Running...\n');
+      // append('🔧 Compiling Java...\n');
+      // const compileResult = await window.electronAPI.runCommandStream(execName, args);
+      // if (compileResult.code !== 0) {
+      //   append('\n❌ javac error:\n' + compileResult.stderr);
+      //   return;
+      // }
+      // append('\n✅ javac finished. Running...\n');
 
-      // find classname (simple heuristic: file name without extension)
-      const classname = fileName.replace(/\.java$/i, '');
-      const javaRunner = appTools.java || 'java';
-      const runResult = await window.electronAPI.runCommandStream(javaRunner, ['-cp', require('path').dirname(currentTab.filePath), classname]);
-      append('\n' + (runResult.stdout || '') + (runResult.stderr || ''));
-      return;
+      // // find classname (simple heuristic: file name without extension)
+      // const classname = fileName.replace(/\.java$/i, '');
+      // const javaRunner = appTools.java || 'java';
+      // const runResult = await window.electronAPI.runCommandStream(javaRunner, ['-cp', require('path').dirname(currentTab.filePath), classname]);
+      // append('\n' + (runResult.stdout || '') + (runResult.stderr || ''));
+      // return;
+
+
+            append('🔧 Compiling Java...\n');
+        const compileResult = await window.electronAPI.runCommandStream(execName, args);
+        if (compileResult.code !== 0) {
+          append('\n❌ javac error:\n' + compileResult.stderr);
+          return;
+        }
+        append('\n✅ javac finished. Running...\n');
+
+        // Extract directory path without require()
+        const filePath = currentTab.filePath;
+        const lastSlashIndex = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+        const fileDir = lastSlashIndex >= 0 ? filePath.substring(0, lastSlashIndex) : '.';
+
+        // Find classname
+        const classname = fileName.replace(/\.java$/i, '');
+        const javaRunner = appTools.java || 'java';
+
+        const runResult = await window.electronAPI.runCommandStream(
+          javaRunner,
+          ['-cp', fileDir, classname]
+        );
+
+        append('\n' + (runResult.stdout || '') + (runResult.stderr || ''));
+        return;
     }
 
     // default single-step execution (py, js, sql)

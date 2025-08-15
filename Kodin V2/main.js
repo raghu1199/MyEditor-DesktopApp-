@@ -5,28 +5,6 @@ const fs = require('fs');
 const { exec, spawn } = require('child_process');
 const os = require('os');
 
-
-const { initializeApp } = require('firebase/app');
-const { getFirestore, doc, getDoc } = require('firebase/firestore');
-
-// ✅ Firebase config (public keys only, safe in client apps)
-const firebaseConfig = {
-  apiKey: "AIzaSyDjkTMgbF-tBHu9r7Gy4tCPjEL6wKLf5cc",
-  authDomain: "editor-6e2cd.firebaseapp.com",
-  databaseURL: "https://editor-6e2cd-default-rtdb.firebaseio.com",
-  projectId: "editor-6e2cd",
-  storageBucket: "editor-6e2cd.firebasestorage.app",
-  messagingSenderId: "90183978485",
-  appId: "1:90183978485:web:09aefe00e4e228b8e864bc",
-  measurementId: "G-9RG7PXFZBY"
-};
-
-
-const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
-
-
-
 let mainWindow;
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -62,27 +40,6 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-
-
-
-// 🔹 IPC to fetch remote config from Firestore
-ipcMain.handle('fetch-remote-config', async () => {
-  try {
-    const ref = doc(db, 'config', 'config');
-    const snapshot = await getDoc(ref);
-
-    if (!snapshot.exists()) {
-      throw new Error('Config document not found');
-    }
-    console.log('Fetched config:',snapshot.data());
-    return snapshot.data(); // { server_api, llm_api }
-  } catch (err) {
-    console.error('Error fetching config:', err);
-    throw err;
-  }
-});
-
-
 ipcMain.handle('dialog:openFile', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -92,9 +49,6 @@ ipcMain.handle('dialog:openFile', async () => {
   const content = await fsp.readFile(filePaths[0], 'utf-8');
   return { canceled: false, filePath: filePaths[0], content };
 });
-
-
-
 
 ipcMain.handle('dialog:saveFile', async (_, { filePath, content }) => {
   if (!filePath) {
@@ -215,8 +169,6 @@ ipcMain.on('window-control', (event, action) => {
 
 
 
-// Resolve bundled tool paths. We assume your installer places tools under resources/tools/<name>/bin
-
 
 function getToolsBasePath() {
   if (process.env.NODE_ENV === 'development') {
@@ -321,6 +273,8 @@ ipcMain.handle('getPlatformExt', () => {
 });
 
 
+
+
 // ipcMain.handle('run-command', async (_, command) => {
 //   return new Promise((resolve, reject) => {
 //     exec(command, { timeout: 5000 }, (err, stdout, stderr) => {
@@ -337,7 +291,7 @@ ipcMain.handle('save-temp-file', async (event, defaultName) => {
     filters: [{ name: 'All Files', extensions: ['*'] }],
   });
   if (result.canceled) return { canceled: true };
-  await fs.promises.writeFile(result.filePath, '');
+  await fs.writeFile(result.filePath, '');
   return { canceled: false, filePath: result.filePath };
 });
 
@@ -399,7 +353,41 @@ ipcMain.handle('export-report', async (event, args) => {
 });
 
 
+// function buildTree(folderPath) {
+//   const walk = (dir) => {
+//     return fsSync.readdirSync(dir).map(item => {
+//       const fullPath = path.join(dir, item);
+//       const stat = fsSync.statSync(fullPath);
+//       if (stat.isDirectory()) {
+//         return {
+//           name: item,
+//           path: fullPath,
+//           type: 'folder',
+//           children: walk(fullPath)
+//         };
+//       } else {
+//         return {
+//           name: item,
+//           path: fullPath,
+//           type: 'file'
+//         };
+//       }
+//     });
+//   };
 
+//   return [{
+//     name: path.basename(folderPath),
+//     path: folderPath,
+//     type: 'folder',
+//     children: walk(folderPath)
+//   }];
+// }
+
+// ipcMain.handle('get-folder-tree', async (event, folderPath) => {
+//   return buildTree(folderPath);
+// });
+
+// in main.js
 
 ipcMain.handle('get-folder-tree', async (_, folderPath) => {
   return await buildTreeAsync(folderPath);
