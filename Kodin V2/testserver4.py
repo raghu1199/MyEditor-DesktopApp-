@@ -52,52 +52,219 @@ firestore_client = firestore.Client()
 storage_client = storage.Client()
 bucket = storage_client.bucket("editor-6e2cd.firebasestorage.app")
 
+
+
+@app.route("/get-requests", methods=["POST"])
+def get_requests():
+    try:
+        data = request.json or {}
+        college = data.get("college")
+        faculty = data.get("faculty")
+        subject = data.get("subject")
+
+        if not all([college, faculty, subject]):
+            return jsonify({"error": "Missing data"}), 400
+
+        # Firestore collection: /college/{faculty}/{subject}/requests/students/{student_id}
+        students_ref = (
+            firestore_client
+            .collection(college)
+            .document(faculty)
+            .collection(subject)
+            .document("requests")
+            .collection("students")
+        )
+
+        students = students_ref.stream()
+
+        requests = []
+        for doc in students:
+            student_data = doc.to_dict()
+            requests.append({
+                "student_id": doc.id,
+                "student_name": student_data.get("student_name", ""),
+                "approved": student_data.get("approved", False),
+                "institute": student_data.get("institute", "")
+            })
+
+        return jsonify({"requests": requests})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/join-class", methods=["POST"])
+def join_class():
+    try:
+        data = request.json or {}
+        college = data.get("college")
+        faculty = data.get("faculty")
+        subject = data.get("subject")
+        student_id = data.get("student_id")
+        student_name = data.get("student_name", "")
+        print("in  join-class recieved:",data)
+
+        if not all([college, faculty, subject, student_id]):
+            return jsonify({"error": "Missing required data"}), 400
+
+        # Request path → institute/faculty/subject/requests/student_id
+        req_ref = (
+            firestore_client
+            .collection(college)
+            .document(faculty)
+            .collection(subject)
+            .document("requests")
+            .collection("students")
+            .document(student_id)
+        )
+
+        req_ref.set({
+            "student_id": student_id,
+            "student_name": student_name,
+            "approved": False
+        }, merge=True)
+
+        return jsonify({"message": "Request submitted"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/approve-requests", methods=["POST"])
+def approve_requests():
+    try:
+        data = request.json or {}
+        college = data.get("college")
+        faculty = data.get("faculty")
+        subject = data.get("subject")
+        approved_ids = data.get("approved_ids", [])
+        print("reciveed in aprove request:",data)
+
+        if not all([college, faculty, subject]) or not approved_ids:
+            return jsonify({"error": "Missing data"}), 400
+
+        batch = firestore_client.batch()
+
+        for sid in approved_ids:
+            req_ref = (
+                firestore_client
+                .collection(college)
+                .document(faculty)
+                .collection(subject)
+                .document("requests")
+                .collection("students")
+                .document(sid)
+            )
+            batch.update(req_ref, {"approved": True})
+
+        batch.commit()
+        return jsonify({"message": "Requests approved"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 @app.route("/upload-report", methods=["POST"])
 def upload_report():
-    file = request.files.get("file")
-    college = request.form.get("college")
-    faculty = request.form.get("faculty")
-    subject = request.form.get("subject")
-    class_id = request.form.get("class")
-    pdf_name = request.form.get("pdf_name")
-    student_name = request.form.get("student_name")
-    student_id = request.form.get("student_id")
+    try:
+        file = request.files.get("file")
+        college = request.form.get("college")
+        faculty = request.form.get("faculty")
+        subject = request.form.get("subject")
+        pdf_name = request.form.get("pdf_name")
+        student_id = request.form.get("student_id")
+        student_name = request.form.get("student_name", "")
 
-    if not all([file, college, faculty, subject, class_id, pdf_name, student_name, student_id]):
-        return jsonify({"error": "Missing data"}), 400
+        if not all([file, college, faculty, subject, pdf_name, student_id]):
+            return jsonify({"error": "Missing data"}), 400
 
-    # ✅ Always create or update the class doc
-    class_doc_ref = (
-        firestore_client
-        .collection(college)
-        .document(faculty)
-        .collection(subject)
-        .document(class_id)
-    )
-    class_doc_ref.set({"_created": True}, merge=True)
+        # ✅ Check if student is approved
+        req_ref = (
+            firestore_client
+            .collection(college)
+            .document(faculty)
+            .collection(subject)
+            .document("requests")
+            .collection("students")
+            .document(student_id)
+        )
 
-    # ✅ Create student subcollection
-    student_doc_ref = class_doc_ref.collection(student_id).document(pdf_name)
+        req_doc = req_ref.get()
+        if not req_doc.exists or not req_doc.to_dict().get("approved", False):
+            return jsonify({"error": "Not approved to submit"}), 403
 
-    storage_path = f"{college}/{faculty}/{subject}/{class_id}/{student_id}/{pdf_name}.pdf"
-    blob = bucket.blob(storage_path)
-    blob.upload_from_file(file)
+        # ✅ Upload report
+        storage_path = f"{college}/{faculty}/{subject}/{student_id}/{pdf_name}.pdf"
+        blob = bucket.blob(storage_path)
+        blob.upload_from_file(file)
 
-    student_doc_ref.set({
-        "college": college,
-        "faculty": faculty,
-        "subject": subject,
-        "class": class_id,
-        "pdf_name": pdf_name,
-        "storage_path": storage_path,
-        "student_name": student_name,
-        "student_id": student_id
-    })
+        report_ref = (
+            firestore_client
+            .collection(college)
+            .document(faculty)
+            .collection(subject)
+            .document("submissions")
+            .collection(student_id)
+            .document(pdf_name)
+        )
 
-    return jsonify({
-        "message": "Upload successful",
-        "storage_path": storage_path
-    })
+        report_ref.set({
+            "student_id": student_id,
+            "student_name": student_name,
+            "pdf_name": pdf_name,
+            "storage_path": storage_path
+        })
+
+        return jsonify({"message": "Upload successful", "storage_path": storage_path})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# @app.route("/upload-report", methods=["POST"])
+# def upload_report():
+#     file = request.files.get("file")
+#     college = request.form.get("college")
+#     faculty = request.form.get("faculty")
+#     subject = request.form.get("subject")
+#     class_id = request.form.get("class")
+#     pdf_name = request.form.get("pdf_name")
+#     student_name = request.form.get("student_name")
+#     student_id = request.form.get("student_id")
+
+#     if not all([file, college, faculty, subject, class_id, pdf_name, student_name, student_id]):
+#         return jsonify({"error": "Missing data"}), 400
+
+#     # ✅ Always create or update the class doc
+#     class_doc_ref = (
+#         firestore_client
+#         .collection(college)
+#         .document(faculty)
+#         .collection(subject)
+#         .document(class_id)
+#     )
+#     class_doc_ref.set({"_created": True}, merge=True)
+
+#     # ✅ Create student subcollection
+#     student_doc_ref = class_doc_ref.collection(student_id).document(pdf_name)
+
+#     storage_path = f"{college}/{faculty}/{subject}/{class_id}/{student_id}/{pdf_name}.pdf"
+#     blob = bucket.blob(storage_path)
+#     blob.upload_from_file(file)
+
+#     student_doc_ref.set({
+#         "college": college,
+#         "faculty": faculty,
+#         "subject": subject,
+#         "class": class_id,
+#         "pdf_name": pdf_name,
+#         "storage_path": storage_path,
+#         "student_name": student_name,
+#         "student_id": student_id
+#     })
+
+#     return jsonify({
+#         "message": "Upload successful",
+#         "storage_path": storage_path
+#     })
 
 
 @app.route("/get-reports", methods=["GET"])

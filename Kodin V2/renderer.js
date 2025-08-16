@@ -113,6 +113,7 @@ class CodeEditorApp {
 
 initTopbar() {
   const topbar = document.getElementById('topbar');
+  // <button id="exportBtn" class="hover:text-teal-400">📤Export</button>
   topbar.innerHTML = `
     <div class="flex items-center justify-between bg-[#1e1e1e] text-gray-200 px-4 h-10 w-full border-b border-[#3c3c3c]">
       <div id="editorActions" class="relative flex space-x-4">
@@ -132,8 +133,10 @@ initTopbar() {
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="saveFile">Save</div>
           </div>
         </div>
-        
         <button id="exportBtn" class="hover:text-teal-400">📤Export</button>
+        <button id="joinClassBt" class="hover:text-teal-400 hidden">🎓 Join Class</button>
+        <button id="viewJoinRequestsBtn" class="hover:text-indigo-400 hidden">📥 View Join Requests</button>
+
         <button id="getQuestionBtn" class="hover:text-teal-400 hidden">📥 Get Question</button>
         <button id="postQuestionBtn" class="hover:text-teal-400 hidden">📝 Post Question</button>
         <button id="viewMySubmissionsBtn" class="hover:text-teal-400 hidden">📥 My Submissions</button>
@@ -494,6 +497,279 @@ showToast(message, duration = 2500) {
   }, duration);
 }
 
+
+
+async joinClass() {
+    const modal = document.createElement("div");
+    modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+    modal.innerHTML = `
+        <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+            <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">Join Class</h2>
+
+            <label class="block mb-2 font-medium">Faculty:</label>
+            <input type="text" id="faculty" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+            <label class="block mb-2 font-medium">Subject:</label>
+            <input type="text" id="subject" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+            <button id="joinClassBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Join</button>
+
+            <button id="closeJoinModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Close modal
+    document.getElementById("closeJoinModalBtn").onclick = () => modal.remove();
+
+    // Handle Join
+    document.getElementById("joinClassBtn").onclick = async () => {
+        const faculty = document.getElementById("faculty").value.trim();
+        const subject = document.getElementById("subject").value.trim();
+
+        // ✅ student details from this.user
+        const student_id = this.user.id;
+        const student_name = this.user.name || ""; // optional
+        const institute = this.user.institute;
+
+        if (!faculty || !subject) {
+            this.showToast("Please fill all fields.");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${this.base_server}/join-class`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    student_id,
+                    student_name,
+                    college: institute,
+                    faculty,
+                    subject
+                })
+            });
+              console.log("in join class renderer sent:",JSON.stringify({
+                    student_id,
+                    student_name,
+                    college: institute,
+                    faculty,
+                    subject
+                }));
+            const data = await res.json();
+            console.log("in join class recieved:",data);
+
+            if (data.message) {
+                this.showToast("✅"||data.message);
+                modal.remove();
+            } else {
+                this.showToast(data.message || "Failed to join class.");
+            }
+        } catch (err) {
+            this.showToast("Error joining class.");
+            console.error(err);
+        }
+    };
+}
+
+
+async askSubjectAndViewRequests() {
+    const modal = document.createElement("div");
+    modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+    modal.innerHTML = `
+        <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+            <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View Join Requests</h2>
+
+            <label class="block mb-2 font-medium">Subject:</label>
+            <input type="text" id="requestSubject" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" placeholder="Enter Subject"/>
+
+            <div id="requestList" class="space-y-4 max-h-64 overflow-y-auto mb-4"></div>
+
+            <button id="fetchRequestsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1] mb-2">Fetch Requests</button>
+            <button id="approveSelectedBtn" class="w-full bg-green-500 text-white font-semibold py-2 rounded hover:bg-green-600 hidden mb-4">Approve Selected</button>
+            <button id="closeRequestsModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const requestList = document.getElementById("requestList");
+    const approveBtn = document.getElementById("approveSelectedBtn");
+
+    // Close modal
+    document.getElementById("closeRequestsModalBtn").onclick = () => modal.remove();
+
+    // Fetch requests
+    document.getElementById("fetchRequestsBtn").onclick = async () => {
+        const subject = document.getElementById("requestSubject").value.trim();
+        const faculty = this.user.id; // or id depending on your API
+        const college = this.user.institute;
+
+        if (!subject) {
+            this.showToast("Please enter a subject.");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${this.base_server}/get-requests`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ subject, faculty, college })
+            });
+            const data = await res.json();
+            console.log("sent for get-requests:",{ subject, faculty, college });
+
+            requestList.innerHTML = "";
+
+            if (data.requests && data.requests.length > 0) {
+                data.requests.forEach(req => {
+                    const div = document.createElement("div");
+                    div.className = "flex justify-between items-center bg-[#444] p-3 rounded";
+                    div.innerHTML = `
+                        <span>${req.student_name} (${req.student_id})</span>
+                        <input type="checkbox" class="request-check" value="${req.student_id}" />
+                    `;
+                    requestList.appendChild(div);
+                });
+                approveBtn.classList.remove("hidden"); // show approve button
+            } else {
+                requestList.innerHTML = `<p class="text-gray-400">No pending requests.</p>`;
+                approveBtn.classList.add("hidden");
+            }
+        } catch (err) {
+            this.showToast("Error fetching requests.");
+            console.error(err);
+        }
+    };
+
+    // Approve selected requests
+    approveBtn.onclick = async () => {
+        const checked = [...document.querySelectorAll(".request-check:checked")].map(c => c.value);
+        if (checked.length === 0) {
+            this.showToast("Select at least one request");
+            return;
+        }
+
+        const subject = document.getElementById("requestSubject").value.trim();
+        const faculty = this.user.id;
+        const college = this.user.institute;
+
+        try {
+            const res = await fetch(`${this.base_server}/approve-requests`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ college, faculty, subject, approved_ids: checked })
+            });
+            const data = await res.json();
+            console.log("sent for approve-requests:",{ college, faculty, subject, approved_ids: checked });
+
+            if (res.ok) {
+                this.showToast("Requests approved ✅");
+                // remove approved rows
+                checked.forEach(id => {
+                    const el = document.querySelector(`.request-check[value="${id}"]`).parentNode;
+                    el.remove();
+                });
+                if (requestList.children.length === 0) approveBtn.classList.add("hidden");
+            } else {
+                this.showToast("Failed: " + data.error);
+            }
+        } catch (err) {
+            this.showToast("Error approving requests.");
+            console.error(err);
+        }
+    };
+}
+
+
+//
+// async askSubjectAndViewRequests() {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View Join Requests</h2>
+
+//             <label class="block mb-2 font-medium">Subject:</label>
+//             <input type="text" id="requestSubject" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+//             <div id="requestList" class="space-y-4"></div>
+
+//             <button id="fetchRequestsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1] mb-4">Fetch Requests</button>
+//             <button id="closeRequestsModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     // Close modal
+//     document.getElementById("closeRequestsModalBtn").onclick = () => modal.remove();
+
+//     // Fetch requests
+//     document.getElementById("fetchRequestsBtn").onclick = async () => {
+//         const subject = document.getElementById("requestSubject").value.trim();
+//         const faculty = this.user.name; // or id depending on your API
+//         const college = this.user.institute;
+
+//         if (!subject) {
+//             this.showToast("Please enter a subject.");
+//             return;
+//         }
+
+//         try {
+//             const res = await fetch(`${this.base_server}/get-requests`, {
+//                 method: "POST",
+//                 headers: { "Content-Type": "application/json" },
+//                 body: JSON.stringify({ subject, faculty, college })
+//             });
+//             const data = await res.json();
+//             console.log("Join requests:", data);
+
+//             const requestList = document.getElementById("requestList");
+//             requestList.innerHTML = "";
+
+//             if (data.requests && data.requests.length > 0) {
+//                 data.requests.forEach(req => {
+//                     const div = document.createElement("div");
+//                     div.className = "flex justify-between items-center bg-[#444] p-3 rounded";
+//                     div.innerHTML = `
+//                         <span>${req.student_name} (${req.student_id})</span>
+//                         <button class="approveBtn bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded">Approve</button>
+//                     `;
+
+//                     div.querySelector(".approveBtn").onclick = async () => {
+//                         try {
+//                             const approveRes = await fetch(`${this.base_server}/approve-request`, {
+//                                 method: "POST",
+//                                 headers: { "Content-Type": "application/json" },
+//                                 body: JSON.stringify({
+//                                     student_id: req.student_id,
+//                                     subject,
+//                                     faculty,
+//                                     college
+//                                 })
+//                             });
+//                             const approveData = await approveRes.json();
+//                             if (approveData.message) {
+//                                 this.showToast("Approved ✅");
+//                                 div.remove();
+//                             } else {
+//                                 this.showToast("Failed to approve");
+//                             }
+//                         } catch (err) {
+//                             this.showToast("Error approving request.");
+//                         }
+//                     };
+
+//                     requestList.appendChild(div);
+//                 });
+//             } else {
+//                 requestList.innerHTML = `<p class="text-gray-400">No pending requests.</p>`;
+//             }
+//         } catch (err) {
+//             this.showToast("Error fetching requests.");
+//             console.error(err);
+//         }
+//     };
+// }
 
 
 async viewMySubmissions() {
@@ -1573,10 +1849,19 @@ showLoginForm(role) {
       const data = await res.json().catch(() => null);
       console.log("received payload:", data);
 
+      if (role === "student") {
+        this.user.id = data.data.student_id;
+        this.user.name = data.data.name;  // ✅ store student_name
+      } else {
+        this.user.id = data.data.email;   // ✅ use email for non-students
+      }
+      this.user.role=role;
+
       if (data?.success) {
-        this.user.id = email_or_roll;
+        
         this.user.institute = institute;
         if (role === "student") this.user.name = data.data.name; // ✅ store student_name
+        console.log("logged in as:",this.user.id)
         this.showEditor();
         this.showToast('✅ Login successful');
       } else {
@@ -1663,6 +1948,28 @@ showLoginForm(role) {
         this.showPostQuestionModal();
       };
       }; 
+      // <button id="joinClassBtn" class="hover:text-teal-400 hidden">🎓 Join Class</button>
+
+      const jcBtn = document.getElementById('joinClassBt');
+        if (this.user.role === 'student') {
+          jcBtn.classList.remove('hidden');
+          jcBtn.onclick = () => {
+            this.joinClass();
+          };
+        }
+
+        const vjrBtn = document.getElementById('viewJoinRequestsBtn');
+      if (this.user.role === 'teacher') {
+        vjrBtn.classList.remove('hidden');
+        // vjrBtn.onclick = this.askSubjectAndViewRequests().bind(this);
+        vjrBtn.onclick = () => {
+          // this.viewJoinRequests();
+        this.askSubjectAndViewRequests()
+          
+        };
+      }
+
+
       // view my submissiion button only for student guest
     const vmBtn = document.getElementById('viewMySubmissionsBtn');
     if (this.user.role != 'teacher') {
