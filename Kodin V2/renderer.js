@@ -42,6 +42,7 @@ class CodeEditorApp {
     this.untitledCounter = 1;
     this.sidebarFiles = [];
     this.currentFolderPath=null;
+    
     this.openedFilePaths=[];
     this.outputs=""; 
     this.base_server="",
@@ -59,6 +60,9 @@ class CodeEditorApp {
 
     this.showWelcomePage();
     this.loadapi();
+    this.facultyCache = new Map();  // key = institute, value = [faculties]
+    this.subjectCache = new Map();  // key = `${institute}_${faculty}`, value = [subjects]
+
     
   }
 
@@ -66,54 +70,77 @@ class CodeEditorApp {
 
 
 
+
   async loadapi() {
-    // ✅ Public Firebase config (safe to expose)
-    const firebaseConfig = {
-      apiKey: "AIzaSyDjkTMgbF-tBHu9r7Gy4tCPjEL6wKLf5cc",
-      authDomain: "editor-6e2cd.firebaseapp.com",
-      databaseURL: "https://editor-6e2cd-default-rtdb.firebaseio.com",
-      projectId: "editor-6e2cd",
-      storageBucket: "editor-6e2cd.firebasestorage.app",
-      messagingSenderId: "90183978485",
-      appId: "1:90183978485:web:09aefe00e4e228b8e864bc",
-      measurementId: "G-9RG7PXFZBY"
+    // Helper function to initialize Firebase and load config
+    const initFirebase = async () => {
+        try {
+            const firebaseConfig = {
+                apiKey: "AIzaSyDjkTMgbF-tBHu9r7Gy4tCPjEL6wKLf5cc",
+                authDomain: "editor-6e2cd.firebaseapp.com",
+                databaseURL: "https://editor-6e2cd-default-rtdb.firebaseio.com",
+                projectId: "editor-6e2cd",
+                storageBucket: "editor-6e2cd.firebasestorage.app",
+                messagingSenderId: "90183978485",
+                appId: "1:90183978485:web:09aefe00e4e228b8e864bc",
+                measurementId: "G-9RG7PXFZBY"
+            };
+
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+
+            const ref = doc(db, "config", "config");
+            const snapshot = await getDoc(ref);
+
+            if (!snapshot.exists()) {
+                throw new Error("Config document not found");
+            }
+
+            const config = snapshot.data();
+            console.log("✅ Loaded remote config:", config);
+
+            this.base_server = config.server_api;
+            this.base_llm = config.llm_api;
+
+        } catch (err) {
+            console.error("❌ Failed to load config:", err);
+            this.showToast("❌ Failed to load remote config. Try Guest Mode.");
+        }
     };
 
+    // Function to check actual internet connection
+    const checkInternet = async () => {
+        if (!navigator.onLine) return false;
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+            await fetch("https://www.gstatic.com/generate_204", { method: "GET", mode: "no-cors", signal: controller.signal });
+            clearTimeout(timeoutId);
+            return true;
+        } catch {
+            return false;
+        }
+    };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    try {
-      const ref = doc(db, "config", "config");
-      const snapshot = await getDoc(ref);
-
-      if (!snapshot.exists()) {
-        throw new Error("Config document not found");
-      }
-
-      const config = snapshot.data();
-      console.log("✅ Loaded remote config:", config);
-
-      // Store in class variables
-      this.base_server = config.server_api;
-      this.base_llm = config.llm_api;
-
-      // Update UI if elements exist
-      // const serverApiEl = document.getElementById("serverApi");
-      // const llmApiEl = document.getElementById("llmApi");
-      // if (serverApiEl) serverApiEl.textContent = config.server_api;
-      // if (llmApiEl) llmApiEl.textContent = config.llm_api;
-
-    } catch (err) {
-      console.error("❌ Failed to load config:", err);
+    // Initial check
+    if (await checkInternet()) {
+        await initFirebase();
+    } else {
+        this.showToast("⚠️ No internet detected. You are in Guest Mode.");
+        console.log("Guest mode activated due to no internet.");
     }
-  }
 
+    // Listen for internet reconnection
+    window.addEventListener("online", async () => {
+        console.log("🌐 Internet reconnected, initializing Firebase...");
+        this.showToast("🌐 Internet detected! Loading remote config...");
+        await initFirebase();
+    });
+}
 
 
 initTopbar() {
   const topbar = document.getElementById('topbar');
-  // <button id="exportBtn" class="hover:text-teal-400">📤Export</button>
   topbar.innerHTML = `
     <div class="flex items-center justify-between bg-[#1e1e1e] text-gray-200 px-4 h-10 w-full border-b border-[#3c3c3c]">
       <div id="editorActions" class="relative flex space-x-4">
@@ -131,35 +158,35 @@ initTopbar() {
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="openFile">Open File</div>
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="openFolder">Open Folder</div>
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="saveFile">Save</div>
+
+            <!-- Moved buttons inside File menu -->
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer hidden" data-action="exportFile">📤 Export</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer hidden" data-action="viewMySubmissions">📥 My Submissions</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer hidden" data-action="viewJoinRequests">📥 View Join Requests</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="logout">Logout</div>
           </div>
         </div>
-        <button id="exportBtn" class="hover:text-teal-400">📤Export</button>
-        <button id="joinClassBt" class="hover:text-teal-400 hidden">🎓 Join Class</button>
-        <button id="viewJoinRequestsBtn" class="hover:text-indigo-400 hidden">📥 View Join Requests</button>
 
+
+        <button id="joinClassBt" class="hover:text-teal-400 hidden">🎓 Join Class</button>
         <button id="getQuestionBtn" class="hover:text-teal-400 hidden">📥 Get Question</button>
         <button id="postQuestionBtn" class="hover:text-teal-400 hidden">📝 Post Question</button>
-        <button id="viewMySubmissionsBtn" class="hover:text-teal-400 hidden">📥 My Submissions</button>
-        <button id="runBtn" class="hover:text-teal-400">Run</button>
+        <button id="uploadBtn" class="hover:text-teal-400 hidden">📤 Upload Session</button>
         <button id="viewClassSubmissionsBtn" class="hover:text-teal-400 hidden">📚 View Class Submissions</button>
         <button id="generateExcelBtn" class="hover:text-teal-400 hidden">📊 Generate Report</button>
 
-        <button id="copilotToggleFromMenu" class="text-sm hover:text-teal-400">Kodin</button>
-
-
-        
-        <button id="uploadBtn" class="hover:text-teal-400 hidden">📤 Upload Session</button>
-
-        <button id="logoutBtn" class="hover:text-red-400">Logout</button>
+        <button id="runBtn" class="hover:text-teal-400">▶Run</button>
+        <button id="copilotToggleFromMenu" class="hover:text-teal-400">🤖Kodin</button>
       </div>
+
       <!-- USER INFO + WINDOW BUTTONS -->
-       <div class="flex items-center space-x-4">
-          <div id="topBarUserInfo" class="text-sm text-gray-300">
-          </div>
-      <div class="flex space-x-2">
-        <button id="min-btn" class="hover:text-gray-400">—</button>
-        <button id="max-btn" class="hover:text-gray-400">▢</button>
-        <button id="close-btn" class="hover:text-red-400">✕</button>
+      <div class="flex items-center space-x-4">
+        <div id="topBarUserInfo" class="text-sm text-gray-300"></div>
+        <div class="flex space-x-2">
+          <button id="min-btn" class="hover:text-gray-400">—</button>
+          <button id="max-btn" class="hover:text-gray-400">▢</button>
+          <button id="close-btn" class="hover:text-red-400">✕</button>
+        </div>
       </div>
     </div>
   `;
@@ -168,8 +195,10 @@ initTopbar() {
   document.getElementById('min-btn').onclick = () => window.electronAPI.windowControl('minimize');
   document.getElementById('max-btn').onclick = () => window.electronAPI.windowControl('maximize');
   document.getElementById('close-btn').onclick = () => window.electronAPI.windowControl('close');
-  document.getElementById('logoutBtn').onclick = () => location.reload();
+  // document.getElementById('logoutBtn').onclick = () => location.reload();
   document.getElementById('runBtn').onclick = () => this.runCode();
+
+      
 
   const fileBtn = document.getElementById('fileBtn');
   const fileMenu = document.getElementById('fileMenu');
@@ -185,155 +214,27 @@ initTopbar() {
 
     
 
+      fileBtn.onclick = (e) => {
+        e.stopPropagation();
+        fileMenu.classList.toggle('hidden');
+        newFileTypeMenu.classList.add('hidden');
+      };
 
-  fileBtn.onclick = (e) => {
-    e.stopPropagation();
-    fileMenu.classList.toggle('hidden');
-    newFileTypeMenu.classList.add('hidden');
-  };
+      // Close menus when clicking outside
+      document.body.addEventListener('click', () => {
+        fileMenu.classList.add('hidden');
+        newFileTypeMenu.classList.add('hidden');
+      });
 
-  document.body.addEventListener('click', () => {
-    fileMenu.classList.add('hidden');
-    newFileTypeMenu.classList.add('hidden');
-  });
-
-
-  // new file logic
-      fileMenu.addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const action = e.target.dataset.action;
-
-  if (action === 'newFile') {
-    newFileTypeMenu.classList.toggle('hidden');
-  } else if (action === 'openFile') {
-    const file = await window.electronAPI.openFile();
-    if (!file.canceled) {
-      const fileName = file.filePath.split(/[/\\]/).pop();
-      this.openTab(fileName, file.content, file.filePath);
-
-      if (!this.openedFilePaths.includes(file.filePath)) {
-        this.openedFilePaths.push(file.filePath);
-      }
-
-      if (!this.sidebarFiles.find(f => f.path === file.filePath)) {
-        this.sidebarFiles.push({ name: fileName, path: file.filePath, type: 'file' });
-        this.refreshSidebar();
-      }
-    }
-  } else if (action === 'openFolder') {
-    const folder = await window.electronAPI.openFolder();
-    this.currentFolderPath = folder.folderPath;
-    if (!folder.canceled) {
-      if (!this.editorInstance) this.showEditor();
-      this.loadFolderToSidebar(folder.tree);
-    }
-  } else if (action === 'saveFile') {
-    this.saveCurrentFile();
-  }
-});
-
-newFileTypeMenu.addEventListener('click', async (e) => {
-  e.stopPropagation(); // ✅ prevents submenu click from closing itself
-
-  const ext = e.target.dataset.type;
-  if (!ext) return;
-
-  const untitledCount = this.tabs.filter(t => t.name.startsWith('untitled')).length;
-  const newName = `untitled-${untitledCount + 1}.${ext}`;
-
-  let filePath;
-  if (this.currentFolderPath) {
-    filePath = await window.electronAPI.joinPath(this.currentFolderPath, newName);
-    await window.electronAPI.saveFile(filePath, '');
-
-    const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
-    this.loadFolderToSidebar(refreshed);
-  } else {
-    const result = await window.electronAPI.saveTempFile(newName);
-    if (result.canceled) return;
-    filePath = result.filePath;
-
-    if (!this.sidebarFiles.find(f => f.path === filePath)) {
-      this.sidebarFiles.push({ name: newName, path: filePath, type: 'file', isUnsaved: true });
-    }
-  }
-
-  if (!this.editorInstance) {
-    this.showEditor();
-  }
-
-  this.openTab(newName, '', filePath);
-
-  if (!this.openedFilePaths.includes(filePath)) {
-    this.openedFilePaths.push(filePath);
-  }
-
-  
-
-  // ✅ Do NOT hide newFileTypeMenu here unless you want to close submenu after one click
-  this.refreshSidebar();
-  newFileTypeMenu.classList.add('hidden');
-    
-  fileMenu.classList.add('hidden');
-});
-
-
-
-    // export pdf
-
-  document.getElementById('exportBtn').onclick = async () => {
-  const openedFiles = this.openedFilePaths || [];
-  const currentUser = this.user?.name || "unknown_user";
-  const currentFolder = this.currentFolderPath || "";
-
-  const tempFilePath = await window.electronAPI.writeOutputToTempFile(this.outputs);
-
-    
-
-  const outputPath = tempFilePath;
-
-  if (!outputPath) {
-    alert("⚠️ No output to export. Please run code first.");
-    return;
-  }
-
-  try {
-    const result = await window.electronAPI.exportReport(
-      openedFiles,
-      currentUser,
-      currentFolder,
-      outputPath
-    );
-
-    if (result.success) {
-      alert("✅ PDF exported successfully!");
-    } else {
-      alert("❌ Export failed. Check console.");
-      console.error(result.error);
-    }
-  } catch (err) {
-    console.error("Unexpected export error:", err);
-    alert("❌ Unexpected error occurred during export.");
-  }
-
-      const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
-      if (refreshed) {
-        requestIdleCallback(() => {
-          this.loadFolderToSidebar(refreshed);
-        });
-    }
-};
-
-  // upload session
-//   document.getElementById('uploadBtn').onclick = () => {
-  
-// };
+      // Bind actions once
+      this.handleFileMenuActions();
 
 
   window.addEventListener('keydown', async (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
       this.saveCurrentFile();
+      this.showToast("✅File Saved.")
     }
   });
 
@@ -360,6 +261,196 @@ newFileTypeMenu.addEventListener('click', async (e) => {
 }
 
 
+handleFileMenuActions() {
+  const fileMenu = document.getElementById('fileMenu');
+  const newFileTypeMenu = document.getElementById('newFileTypeMenu');
+
+
+  
+
+  // 1️⃣ File menu click listener
+  fileMenu.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const action = e.target.dataset.action;
+
+    switch (action) {
+      case 'newFile':
+        newFileTypeMenu.classList.toggle('hidden');
+        break;
+
+      case 'openFile': {
+        const file = await window.electronAPI.openFile();
+        if (!file.canceled) {
+          const fileName = file.filePath.split(/[/\\]/).pop();
+          this.openTab(fileName, file.content, file.filePath);
+
+          if (!this.openedFilePaths.includes(file.filePath)) {
+            this.openedFilePaths.push(file.filePath);
+          }
+
+          if (!this.sidebarFiles.find(f => f.path === file.filePath)) {
+            this.sidebarFiles.push({ name: fileName, path: file.filePath, type: 'file' });
+            this.refreshSidebar();
+          }
+        }
+        fileMenu.classList.add('hidden');
+        break;
+      }
+
+      case 'openFolder': {
+        const folder = await window.electronAPI.openFolder();
+        if (folder.canceled) break;  // ← skip only if user canceled
+        this.currentFolderPath = folder.folderPath;
+        if (!this.editorInstance) this.showEditor();
+        this.loadFolderToSidebar(folder.tree);
+        fileMenu.classList.add('hidden');
+        break;
+      }
+
+      case 'saveFile':
+        this.saveCurrentFile();
+        fileMenu.classList.add('hidden');
+        break;
+
+      default:
+        break;
+    }
+  });
+
+  // 2️⃣ New file type submenu click
+  newFileTypeMenu.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const ext = e.target.dataset.type;
+    if (!ext) return;
+
+    const untitledCount = this.tabs.filter(t => t.name.startsWith('untitled')).length;
+    const newName = `untitled-${untitledCount + 1}.${ext}`;
+    let filePath;
+
+    if (this.currentFolderPath) {
+      filePath = await window.electronAPI.joinPath(this.currentFolderPath, newName);
+      await window.electronAPI.saveFile(filePath, '');
+      const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
+      this.loadFolderToSidebar(refreshed);
+    } else {
+      const result = await window.electronAPI.saveTempFile(newName);
+      if (result.canceled) return;
+      filePath = result.filePath;
+
+      if (!this.sidebarFiles.find(f => f.path === filePath)) {
+        this.sidebarFiles.push({ name: newName, path: filePath, type: 'file', isUnsaved: true });
+      }
+    }
+
+    if (!this.editorInstance) this.showEditor();
+    this.openTab(newName, '', filePath);
+
+    if (!this.openedFilePaths.includes(filePath)) {
+      this.openedFilePaths.push(filePath);
+    }
+
+    this.refreshSidebar();
+    newFileTypeMenu.classList.add('hidden');
+    fileMenu.classList.add('hidden');
+  });
+}
+
+
+async handleExportFile() {
+  const openedFiles = this.openedFilePaths || [];
+  const currentUser = this.user?.name || "unknown_user";
+  const currentFolder = this.currentFolderPath || "";
+
+  // Write outputs to temp file
+  const tempFilePath = await window.electronAPI.writeOutputToTempFile(this.outputs);
+  const outputPath = tempFilePath;
+
+  if (!outputPath) {
+    alert("⚠️ No output to export. Please run code first.");
+    return;
+  }
+
+  try {
+    const result = await window.electronAPI.exportReport(
+      openedFiles,
+      currentUser,
+      currentFolder,
+      outputPath
+    );
+
+    if (result.success) {
+      alert("✅ PDF exported successfully!");
+    } else {
+      alert("❌ Export failed. Check console.");
+      console.error(result.error);
+    }
+  } catch (err) {
+    console.error("Unexpected export error:", err);
+    alert("❌ Unexpected error occurred during export.");
+  }
+
+  // Refresh folder tree in sidebar
+  if (this.currentFolderPath) {
+    const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
+    if (refreshed) {
+      requestIdleCallback(() => {
+        this.loadFolderToSidebar(refreshed);
+      });
+    }
+  }
+}
+
+
+
+initFileMenuUserActions() {
+  if (!this.user) return; // safety check
+
+  const fileMenu = document.getElementById('fileMenu');
+
+  // Hide all role-specific items first
+  fileMenu.querySelectorAll('[data-action="exportFile"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"]').forEach(el => {
+    el.classList.add('hidden');
+  });
+
+  // Role-based visibility
+  if (this.user.role === 'teacher') {
+    fileMenu.querySelector('[data-action="viewJoinRequests"]').classList.remove('hidden');
+  } else if (this.user.role === 'student') {
+    fileMenu.querySelector('[data-action="viewMySubmissions"]').classList.remove('hidden');
+  }
+
+  // Export and logout for all users
+  fileMenu.querySelector('[data-action="exportFile"]').classList.remove('hidden');
+  fileMenu.querySelector('[data-action="logout"]').classList.remove('hidden');
+
+  // Attach click handlers
+  fileMenu.querySelectorAll('[data-action="exportFile"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"]').forEach(item => {
+    item.replaceWith(item.cloneNode(true));
+  });
+
+  fileMenu.querySelectorAll('[data-action="exportFile"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"]').forEach(item => {
+    item.addEventListener('click', (e) => {
+      const action = e.currentTarget.dataset.action;
+      switch(action) {
+        case 'viewJoinRequests':
+          this.askSubjectAndViewRequests();
+          break;
+        case 'viewMySubmissions':
+          this.viewMySubmissions();
+          break;
+        case 'exportFile':
+          this.handleExportFile();
+          break;
+        case 'logout':
+          this.logout();
+          break;
+      }
+    });
+  });
+}
+
+
+
 showQuestionModal() {
   let modal = document.getElementById("getQuestionModal");
 
@@ -369,10 +460,16 @@ showQuestionModal() {
       <div id="getQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
         <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Get Question</h2>
+          
           <label class="block text-sm text-white mb-1">Faculty:</label>
           <input id="facultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
           <label class="block text-sm text-white mb-1">Subject:</label>
           <input id="subjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
+          <label class="block text-sm text-white mb-1">Class ID:</label>
+          <input id="classIdInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
           <div class="flex justify-end space-x-2">
             <button id="cancelQuestionBtn" class="text-white hover:text-red-400">Cancel</button>
             <button id="fetchQuestionBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Fetch</button>
@@ -386,12 +483,14 @@ showQuestionModal() {
 
   const facultyInput = document.getElementById("facultyInput");
   const subjectInput = document.getElementById("subjectInput");
+  const classIdInput = document.getElementById("classIdInput");
   const cancelBtn = document.getElementById("cancelQuestionBtn");
   const fetchBtn = document.getElementById("fetchQuestionBtn");
 
   // Reset input fields and show modal
   facultyInput.value = "";
   subjectInput.value = "";
+  classIdInput.value = "";
   modal.classList.remove("hidden");
   modal.classList.add("flex");
 
@@ -403,21 +502,26 @@ showQuestionModal() {
   fetchBtn.onclick = () => {
     const faculty = facultyInput.value.trim();
     const subject = subjectInput.value.trim();
+    const classId = classIdInput.value.trim();
+
     modal.classList.add("hidden");
     modal.classList.remove("flex");
-    this.fetchQuestion(faculty, subject);
+
+    this.fetchQuestion(faculty, subject, classId);
   };
 }
 
-async fetchQuestion(faculty, subject) {
+async fetchQuestion(faculty, subject, classId) {
   const institute = this.user.institute || '';
-  if (!faculty || !subject || !institute) {
-    alert("Faculty, subject, or institute is missing.");
+  if (!faculty || !subject || !classId || !institute) {
+    this.showToast("Faculty, subject, class ID, or institute is missing.");
     return;
   }
 
   try {
-    const response = await fetch(`${this.base_server}/get_question?faculty=${faculty}&subject=${subject}&institute=${institute}`);
+    const response = await fetch(
+      `${this.base_server}/get_question?faculty=${faculty}&subject=${subject}&class_id=${classId}&institute=${institute}`
+    );
     if (!response.ok) throw new Error(await response.text());
 
     const data = await response.json();
@@ -429,35 +533,132 @@ async fetchQuestion(faculty, subject) {
     const refreshed = await window.electronAPI.getFolderTree(folderPath);
     if (!refreshed) {
       console.error("getFolderTree returned null. Path:", folderPath);
-      alert("Failed to load folder structure.");
+      this.showToast("Failed to load folder structure.");
       return;
     }
 
     this.currentFolderPath = folderPath;
 
     setTimeout(() => {
+      requestIdleCallback(() => {
+        console.log("before sidebar load");
+        this.loadFolderToSidebar(refreshed);
+        console.log("after sidebar load");
 
-    requestIdleCallback(() => {
-      console.log("before sidebar load");
-      this.loadFolderToSidebar(refreshed);
-      console.log("before sidebar load");
-
-      // Show alert only after DOM paints
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          // alert(".");
-          this.showToast("✅ Question folder created and loaded!");
-
-        }, 50);
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            this.showToast("✅ Question folder created and loaded!");
+          }, 50);
+        });
       });
-    });
-  }, 100); 
+    }, 100);
 
   } catch (error) {
     console.error("Fetch error:", error);
-    alert("Failed to fetch question: " + error.message);
+    this.showToast("Failed to fetch question: " + error.message);
   }
 }
+
+
+
+// showQuestionModal() {
+//   let modal = document.getElementById("getQuestionModal");
+
+//   // Create modal if it doesn't exist
+//   if (!modal) {
+//     const modalHTML = `
+//       <div id="getQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
+//         <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
+//           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Get Question</h2>
+//           <label class="block text-sm text-white mb-1">Faculty:</label>
+//           <input id="facultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+//           <label class="block text-sm text-white mb-1">Subject:</label>
+//           <input id="subjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+//           <div class="flex justify-end space-x-2">
+//             <button id="cancelQuestionBtn" class="text-white hover:text-red-400">Cancel</button>
+//             <button id="fetchQuestionBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Fetch</button>
+//           </div>
+//         </div>
+//       </div>
+//     `;
+//     document.body.insertAdjacentHTML("beforeend", modalHTML);
+//     modal = document.getElementById("getQuestionModal");
+//   }
+
+//   const facultyInput = document.getElementById("facultyInput");
+//   const subjectInput = document.getElementById("subjectInput");
+//   const cancelBtn = document.getElementById("cancelQuestionBtn");
+//   const fetchBtn = document.getElementById("fetchQuestionBtn");
+
+//   // Reset input fields and show modal
+//   facultyInput.value = "";
+//   subjectInput.value = "";
+//   modal.classList.remove("hidden");
+//   modal.classList.add("flex");
+
+//   cancelBtn.onclick = () => {
+//     modal.classList.add("hidden");
+//     modal.classList.remove("flex");
+//   };
+
+//   fetchBtn.onclick = () => {
+//     const faculty = facultyInput.value.trim();
+//     const subject = subjectInput.value.trim();
+//     modal.classList.add("hidden");
+//     modal.classList.remove("flex");
+//     this.fetchQuestion(faculty, subject);
+//   };
+// }
+
+// async fetchQuestion(faculty, subject) {
+//   const institute = this.user.institute || '';
+//   if (!faculty || !subject || !institute) {
+//     this.showToast("Faculty, subject, or institute is missing.");
+//     return;
+//   }
+
+//   try {
+//     const response = await fetch(`${this.base_server}/get_question?faculty=${faculty}&subject=${subject}&institute=${institute}`);
+//     if (!response.ok) throw new Error(await response.text());
+
+//     const data = await response.json();
+//     const questionText = data.question || "No question returned.";
+
+//     const folderPath = await window.electronAPI.saveQuestionFiles({ questionText });
+//     if (!folderPath) throw new Error("Failed to save question files.");
+
+//     const refreshed = await window.electronAPI.getFolderTree(folderPath);
+//     if (!refreshed) {
+//       console.error("getFolderTree returned null. Path:", folderPath);
+//       this.showToast("Failed to load folder structure.");
+//       return;
+//     }
+
+//     this.currentFolderPath = folderPath;
+
+//     setTimeout(() => {
+
+//     requestIdleCallback(() => {
+//       console.log("before sidebar load");
+//       this.loadFolderToSidebar(refreshed);
+//       console.log("before sidebar load");
+
+//       // Show alert only after DOM paints
+//       requestAnimationFrame(() => {
+//         setTimeout(() => {
+//           // alert(".");
+//           this.showToast("✅ Question folder created and loaded!");
+
+//         }, 50);
+//       });
+//     });
+//   }, 100); 
+
+//   } catch (error) {
+//     console.error("Fetch error:", error);
+//     this.showToast("Failed to fetch question: " + error.message);
+//   }
+// }
 
 showToast(message, duration = 2500) {
   const toast = document.createElement('div');
@@ -499,6 +700,104 @@ showToast(message, duration = 2500) {
 
 
 
+// ✅ Global caches
+// const facultyCache = new Map();  // key = institute, value = [faculties]
+// const subjectCache = new Map();  // key = `${institute}_${faculty}`, value = [subjects]
+
+// ✅ Reusable: Autocomplete for faculties
+async setupFacultyAutocomplete(inputEl, institute, base_server) {
+    inputEl.addEventListener("input", async () => {
+        const query = inputEl.value.trim().toLowerCase();
+        if (!query) return;
+
+        try {
+            // Check cache first
+            let faculties;
+            if (this.facultyCache.has(institute)) {
+                faculties = this.facultyCache.get(institute);
+            } else {
+                const res = await fetch(`${base_server}/get-faculties/${institute}`);
+                const data = await res.json();
+                faculties = data.faculties || [];
+                this.facultyCache.set(institute, faculties);
+            }
+
+            // Filter locally instead of server query
+            const filtered = faculties.filter(f => f.toLowerCase().includes(query));
+
+            let list = document.getElementById("faculty-list");
+            if (!list) {
+                list = document.createElement("div");
+                list.id = "faculty-list";
+                list.className = "absolute bg-[#444] border border-gray-600 mt-1 w-full max-h-40 overflow-y-auto rounded z-50";
+                inputEl.parentNode.appendChild(list);
+            }
+            list.innerHTML = "";
+
+            filtered.forEach(f => {
+                const option = document.createElement("div");
+                option.className = "p-2 cursor-pointer hover:bg-[#555]";
+                option.textContent = f;
+                option.onclick = () => {
+                    inputEl.value = f;
+                    list.innerHTML = "";
+                };
+                list.appendChild(option);
+            });
+        } catch (err) {
+            console.error("Error fetching faculties:", err);
+        }
+    });
+}
+
+// ✅ Reusable: Autocomplete for subjects
+async setupSubjectAutocomplete(inputEl, institute, facultyInput, base_server) {
+    inputEl.addEventListener("input", async () => {
+        const query = inputEl.value.trim().toLowerCase();
+        const faculty = facultyInput.value.trim();
+        if (!query || !faculty) return;
+
+        try {
+            const key = `${institute}_${faculty}`;
+            let subjects;
+            if (this.subjectCache.has(key)) {
+                subjects = this.subjectCache.get(key);
+            } else {
+                const res = await fetch(`${base_server}/get-subjects/${institute}/${encodeURIComponent(faculty)}`);
+                const data = await res.json();
+                subjects = data.subjects || [];
+                this.subjectCache.set(key, subjects);
+            }
+
+            // Filter locally
+            const filtered = subjects.filter(s => s.toLowerCase().includes(query));
+
+            let list = document.getElementById("subject-list");
+            if (!list) {
+                list = document.createElement("div");
+                list.id = "subject-list";
+                list.className = "absolute bg-[#444] border border-gray-600 mt-1 w-full max-h-40 overflow-y-auto rounded z-50";
+                inputEl.parentNode.appendChild(list);
+            }
+            list.innerHTML = "";
+
+            filtered.forEach(s => {
+                const option = document.createElement("div");
+                option.className = "p-2 cursor-pointer hover:bg-[#555]";
+                option.textContent = s;
+                option.onclick = () => {
+                    inputEl.value = s;
+                    list.innerHTML = "";
+                };
+                list.appendChild(option);
+            });
+        } catch (err) {
+            console.error("Error fetching subjects:", err);
+        }
+    });
+}
+
+
 async joinClass() {
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
@@ -506,14 +805,17 @@ async joinClass() {
         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">Join Class</h2>
 
-            <label class="block mb-2 font-medium">Faculty:</label>
-            <input type="text" id="faculty" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            <div class="relative mb-4">
+                <label class="block mb-2 font-medium">Faculty:</label>
+                <input type="text" id="faculty" class="w-full p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            </div>
 
-            <label class="block mb-2 font-medium">Subject:</label>
-            <input type="text" id="subject" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            <div class="relative mb-6">
+                <label class="block mb-2 font-medium">Subject:</label>
+                <input type="text" id="subject" class="w-full p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            </div>
 
             <button id="joinClassBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Join</button>
-
             <button id="closeJoinModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
         </div>
     `;
@@ -522,15 +824,22 @@ async joinClass() {
     // Close modal
     document.getElementById("closeJoinModalBtn").onclick = () => modal.remove();
 
+    // Setup autocomplete
+    const facultyInput = document.getElementById("faculty");
+    const subjectInput = document.getElementById("subject");
+    const institute = this.user.institute;
+
+    this.setupFacultyAutocomplete(facultyInput, institute, this.base_server);
+    this.setupSubjectAutocomplete(subjectInput, institute, facultyInput, this.base_server);
+
     // Handle Join
     document.getElementById("joinClassBtn").onclick = async () => {
-        const faculty = document.getElementById("faculty").value.trim();
-        const subject = document.getElementById("subject").value.trim();
+        const faculty = facultyInput.value.trim();
+        const subject = subjectInput.value.trim();
 
-        // ✅ student details from this.user
         const student_id = this.user.id;
-        const student_name = this.user.name || ""; // optional
-        const institute = this.user.institute;
+        const student_name = this.user.name || "";
+        const college = this.user.institute;
 
         if (!faculty || !subject) {
             this.showToast("Please fill all fields.");
@@ -541,26 +850,12 @@ async joinClass() {
             const res = await fetch(`${this.base_server}/join-class`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    student_id,
-                    student_name,
-                    college: institute,
-                    faculty,
-                    subject
-                })
+                body: JSON.stringify({ student_id, student_name, college, faculty, subject })
             });
-              console.log("in join class renderer sent:",JSON.stringify({
-                    student_id,
-                    student_name,
-                    college: institute,
-                    faculty,
-                    subject
-                }));
             const data = await res.json();
-            console.log("in join class recieved:",data);
 
             if (data.message) {
-                this.showToast("✅"||data.message);
+                this.showToast("✅ " + data.message);
                 modal.remove();
             } else {
                 this.showToast(data.message || "Failed to join class.");
@@ -571,6 +866,80 @@ async joinClass() {
         }
     };
 }
+
+
+// async joinClass() {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">Join Class</h2>
+
+//             <label class="block mb-2 font-medium">Faculty:</label>
+//             <input type="text" id="faculty" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+//             <label class="block mb-2 font-medium">Subject:</label>
+//             <input type="text" id="subject" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+//             <button id="joinClassBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Join</button>
+
+//             <button id="closeJoinModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     // Close modal
+//     document.getElementById("closeJoinModalBtn").onclick = () => modal.remove();
+
+//     // Handle Join
+//     document.getElementById("joinClassBtn").onclick = async () => {
+//         const faculty = document.getElementById("faculty").value.trim();
+//         const subject = document.getElementById("subject").value.trim();
+
+//         // ✅ student details from this.user
+//         const student_id = this.user.id;
+//         const student_name = this.user.name || ""; // optional
+//         const institute = this.user.institute;
+
+//         if (!faculty || !subject) {
+//             this.showToast("Please fill all fields.");
+//             return;
+//         }
+
+//         try {
+//             const res = await fetch(`${this.base_server}/join-class`, {
+//                 method: "POST",
+//                 headers: { "Content-Type": "application/json" },
+//                 body: JSON.stringify({
+//                     student_id,
+//                     student_name,
+//                     college: institute,
+//                     faculty,
+//                     subject
+//                 })
+//             });
+//               console.log("in join class renderer sent:",JSON.stringify({
+//                     student_id,
+//                     student_name,
+//                     college: institute,
+//                     faculty,
+//                     subject
+//                 }));
+//             const data = await res.json();
+//             console.log("in join class recieved:",data);
+
+//             if (data.message) {
+//                 this.showToast("✅"||data.message);
+//                 modal.remove();
+//             } else {
+//                 this.showToast(data.message || "Failed to join class.");
+//             }
+//         } catch (err) {
+//             this.showToast("Error joining class.");
+//             console.error(err);
+//         }
+//     };
+// }
 
 
 async askSubjectAndViewRequests() {
@@ -681,95 +1050,6 @@ async askSubjectAndViewRequests() {
 }
 
 
-//
-// async askSubjectAndViewRequests() {
-//     const modal = document.createElement("div");
-//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
-//     modal.innerHTML = `
-//         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
-//             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View Join Requests</h2>
-
-//             <label class="block mb-2 font-medium">Subject:</label>
-//             <input type="text" id="requestSubject" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
-
-//             <div id="requestList" class="space-y-4"></div>
-
-//             <button id="fetchRequestsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1] mb-4">Fetch Requests</button>
-//             <button id="closeRequestsModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
-//         </div>
-//     `;
-//     document.body.appendChild(modal);
-
-//     // Close modal
-//     document.getElementById("closeRequestsModalBtn").onclick = () => modal.remove();
-
-//     // Fetch requests
-//     document.getElementById("fetchRequestsBtn").onclick = async () => {
-//         const subject = document.getElementById("requestSubject").value.trim();
-//         const faculty = this.user.name; // or id depending on your API
-//         const college = this.user.institute;
-
-//         if (!subject) {
-//             this.showToast("Please enter a subject.");
-//             return;
-//         }
-
-//         try {
-//             const res = await fetch(`${this.base_server}/get-requests`, {
-//                 method: "POST",
-//                 headers: { "Content-Type": "application/json" },
-//                 body: JSON.stringify({ subject, faculty, college })
-//             });
-//             const data = await res.json();
-//             console.log("Join requests:", data);
-
-//             const requestList = document.getElementById("requestList");
-//             requestList.innerHTML = "";
-
-//             if (data.requests && data.requests.length > 0) {
-//                 data.requests.forEach(req => {
-//                     const div = document.createElement("div");
-//                     div.className = "flex justify-between items-center bg-[#444] p-3 rounded";
-//                     div.innerHTML = `
-//                         <span>${req.student_name} (${req.student_id})</span>
-//                         <button class="approveBtn bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded">Approve</button>
-//                     `;
-
-//                     div.querySelector(".approveBtn").onclick = async () => {
-//                         try {
-//                             const approveRes = await fetch(`${this.base_server}/approve-request`, {
-//                                 method: "POST",
-//                                 headers: { "Content-Type": "application/json" },
-//                                 body: JSON.stringify({
-//                                     student_id: req.student_id,
-//                                     subject,
-//                                     faculty,
-//                                     college
-//                                 })
-//                             });
-//                             const approveData = await approveRes.json();
-//                             if (approveData.message) {
-//                                 this.showToast("Approved ✅");
-//                                 div.remove();
-//                             } else {
-//                                 this.showToast("Failed to approve");
-//                             }
-//                         } catch (err) {
-//                             this.showToast("Error approving request.");
-//                         }
-//                     };
-
-//                     requestList.appendChild(div);
-//                 });
-//             } else {
-//                 requestList.innerHTML = `<p class="text-gray-400">No pending requests.</p>`;
-//             }
-//         } catch (err) {
-//             this.showToast("Error fetching requests.");
-//             console.error(err);
-//         }
-//     };
-// }
 
 
 async viewMySubmissions() {
@@ -1207,107 +1487,6 @@ showClassReportViewerModal(subject, reports, college, faculty, classId) {
 }
 
 
-// showClassReportViewerModal(subject, reports, college, faculty, classId) {
-//     const modal = document.createElement("div");
-//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
-
-//     // Group reports by student_id
-//     const grouped = reports.reduce((acc, r) => {
-//         if (!acc[r.student_id]) acc[r.student_id] = [];
-//         acc[r.student_id].push(r);
-//         return acc;
-//     }, {});
-
-//     const reportCards = Object.entries(grouped).map(([studentId, studentReports]) => {
-//         const studentName = studentReports[0]?.student_name || "Unknown";
-//         const pdfList = studentReports.map(r => `
-//             <div class="flex justify-between items-center mt-2">
-//                 <span class="text-sm text-gray-300">${r.pdf_name || 'session.pdf'}</span>
-//                 <button 
-//                     class="download-btn bg-[#61dafb] text-black px-2 py-1 rounded hover:bg-[#21a1f1]" 
-//                     data-path="${r.storage_path}">
-//                     Download
-//                 </button>
-//             </div>
-//         `).join("");
-
-//         return `
-//             <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
-//                 <p class="text-[#61dafb] font-semibold">${studentName}</p>
-//                 <p class="text-gray-400 text-sm">ID: ${studentId}</p>
-//                 ${pdfList}
-//                 <div class="mt-3">
-//                     <input 
-//                         type="number" 
-//                         min="0" max="100" 
-//                         class="marks-input w-20 p-1 rounded bg-[#444] border border-gray-600 text-white text-center" 
-//                         data-student-id="${studentId}" 
-//                         placeholder="Marks"
-//                         value="${studentReports[0]?.marks || ''}"
-//                     />
-//                 </div>
-//             </div>
-//         `;
-//     }).join("");
-
-//     modal.innerHTML = `
-//         <div class="bg-[#333333] rounded-lg mt-16 w-[650px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
-//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject} - ${classId}</h2>
-
-//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
-
-//             ${reports.length > 0 ? `
-//             <button id="updateMarksBtn" class="mt-4 w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">
-//                 Update Marks
-//             </button>` : ""}
-
-//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
-//         </div>
-//     `;
-//     document.body.appendChild(modal);
-
-//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
-
-//     // Download handlers
-//     modal.querySelectorAll(".download-btn").forEach(btn => {
-//         const path = btn.dataset.path;
-//         btn.onclick = () => this.downloadReport(path);
-//     });
-
-//     // Update marks
-//     const updateBtn = modal.querySelector("#updateMarksBtn");
-//     if (updateBtn) {
-//         updateBtn.onclick = async () => {
-//             const marksData = [];
-//             modal.querySelectorAll(".marks-input").forEach(input => {
-//                 marksData.push({
-                    
-//                     student_id: input.dataset.studentId,
-//                     marks: input.value
-//                 });
-//             });
-
-//             try {
-//                 const res = await fetch(`${this.base_server}/update-marks`, {
-//                     method: "POST",
-//                     headers: { "Content-Type": "application/json" },
-//                     body: JSON.stringify({
-//                         college,
-//                         faculty,
-//                         subject,
-//                         classId,
-//                         marksData
-//                     })
-//                 });
-//                 const data = await res.json();
-//                 this.showToast(data.message || "Marks updated successfully");
-//             } catch (err) {
-//                 console.error(err);
-//                 this.showToast("Failed to update marks.");
-//             }
-//         };
-//     }
-// }
 
 
 async generateMarksReport() {
@@ -1374,12 +1553,6 @@ async generateMarksReport() {
 
 
 
-
-
-
-
-
-
 async showPostQuestionModal() {
   let modal = document.getElementById("postQuestionModal");
 
@@ -1388,10 +1561,16 @@ async showPostQuestionModal() {
       <div id="postQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
         <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Post a Question</h2>
+          
           <label class="block text-sm text-white mb-1">Subject:</label>
           <input id="postSubjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
+          <label class="block text-sm text-white mb-1">Class ID:</label>
+          <input id="postClassIdInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
           <label class="block text-sm text-white mb-1">Question:</label>
           <textarea id="postQuestionInput" rows="4" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4 resize-none"></textarea>
+
           <div class="flex justify-end space-x-2">
             <button id="cancelPostBtn" class="text-white hover:text-red-400">Cancel</button>
             <button id="submitPostBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Submit</button>
@@ -1416,13 +1595,14 @@ async showPostQuestionModal() {
 
   submitBtn.onclick = async () => {
     const subject = document.getElementById("postSubjectInput").value.trim();
+    const classId = document.getElementById("postClassIdInput").value.trim();
     const questionText = document.getElementById("postQuestionInput").value.trim();
 
-    const faculty = this.user.name;
+    const faculty = this.user.id;
     const institute = this.user.institute;
 
-    if (!subject || !questionText || !faculty || !institute) {
-      this.showToast("❌Please fill all fields before submitting.");
+    if (!subject || !classId || !questionText || !faculty || !institute) {
+      this.showToast("❌ Please fill all fields before submitting.");
       return;
     }
 
@@ -1430,7 +1610,7 @@ async showPostQuestionModal() {
       const response = await fetch(`${this.base_server}/post_question`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, faculty, question: questionText, institute })
+        body: JSON.stringify({ subject, classId, faculty, question: questionText, institute })
       });
 
       if (!response.ok) {
@@ -1448,6 +1628,80 @@ async showPostQuestionModal() {
     modal.classList.remove("flex");
   };
 }
+
+
+
+
+
+
+// async showPostQuestionModal() {
+//   let modal = document.getElementById("postQuestionModal");
+
+//   if (!modal) {
+//     const modalHTML = `
+//       <div id="postQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
+//         <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
+//           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Post a Question</h2>
+//           <label class="block text-sm text-white mb-1">Subject:</label>
+//           <input id="postSubjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+//           <label class="block text-sm text-white mb-1">Question:</label>
+//           <textarea id="postQuestionInput" rows="4" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4 resize-none"></textarea>
+//           <div class="flex justify-end space-x-2">
+//             <button id="cancelPostBtn" class="text-white hover:text-red-400">Cancel</button>
+//             <button id="submitPostBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Submit</button>
+//           </div>
+//         </div>
+//       </div>
+//     `;
+//     document.body.insertAdjacentHTML("beforeend", modalHTML);
+//     modal = document.getElementById("postQuestionModal");
+//   }
+
+//   modal.classList.remove("hidden");
+//   modal.classList.add("flex");
+
+//   const cancelBtn = document.getElementById("cancelPostBtn");
+//   const submitBtn = document.getElementById("submitPostBtn");
+
+//   cancelBtn.onclick = () => {
+//     modal.classList.add("hidden");
+//     modal.classList.remove("flex");
+//   };
+
+//   submitBtn.onclick = async () => {
+//     const subject = document.getElementById("postSubjectInput").value.trim();
+//     const questionText = document.getElementById("postQuestionInput").value.trim();
+
+//     const faculty = this.user.name;
+//     const institute = this.user.institute;
+
+//     if (!subject || !questionText || !faculty || !institute) {
+//       this.showToast("❌Please fill all fields before submitting.");
+//       return;
+//     }
+
+//     try {
+//       const response = await fetch(`${this.base_server}/post_question`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ subject, faculty, question: questionText, institute })
+//       });
+
+//       if (!response.ok) {
+//         const err = await response.text();
+//         throw new Error(err);
+//       }
+
+//       this.showToast("✅ Question posted successfully.");
+//     } catch (error) {
+//       console.error("Post error:", error);
+//       this.showToast("❌ Failed to post question: " + error.message);
+//     }
+
+//     modal.classList.add("hidden");
+//     modal.classList.remove("flex");
+//   };
+// }
 
 
 async showUploadSessionModal() {
@@ -1701,96 +1955,122 @@ showSignupForm(role) {
 }
 
 
+async fetchInstitutesFromBackend() {
+  // Cache institutes to avoid repeated network calls
+  if (!window.allInstitutesCache) {
+    try {
+      const res = await fetch(`${this.base_server}/institutes`); // Flask endpoint returning all institute names
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      // Assuming backend returns: { institutes: ["Institute1", "Institute2", ...] }
+      window.allInstitutesCache = data.institutes || [];
+    } catch (err) {
+      console.error("Failed to fetch institutes:", err);
+      window.allInstitutesCache = [];
+    }
+  }
+  return window.allInstitutesCache;
+}
 
-//   showWelcomePage() {
-//     this.toggleEditorActions(false);
-//     const app = document.getElementById('app');
-//     app.classList.remove('hidden');
-//     document.getElementById('editorLayout').classList.add('hidden');
+setupInstituteAutocomplete(inputElement, fetchInstitutesFunc) {
+  // Create suggestions box dynamically
+  let suggestionsBox = document.createElement('div');
+  suggestionsBox.id = 'suggestions';
+  inputElement.parentElement.appendChild(suggestionsBox);
 
-//     app.innerHTML = `
-//       <div class="h-full w-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950 px-4">
-//         <h1 class="text-6xl font-extrabold mb-14 text-white">Welcome to <span class="text-teal-400">Kodin</span></h1>
-//         <div class="flex flex-col space-y-6 w-full max-w-xs">
-//           ${this.button('Student', 'student')}
-//           ${this.button('Teacher', 'teacher')}
-//           ${this.button('Proceed as Guest', 'guest')}
-//         </div>
-//       </div>
-//     `;
-
-//     document.querySelectorAll('button[data-role]').forEach(btn => {
-//       const role = btn.dataset.role;
-//       btn.onclick = () => {
-//         if (role === 'guest') this.showEditor();
-//         else this.showLoginForm(role);
-
-//       }; 
-//     });
-//   }
-  
-
-  // button(label, role) {
-  //   return `
-  //     <button data-role="${role}" class="w-full py-4 px-8 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-xl font-bold text-white">
-  //       ${label}
-  //     </button>
-  //   `;
-  // }
-
-
-//   showLoginForm(role) {
-//     this.toggleEditorActions(false);
-//     const app = document.getElementById('app');
-//     this.user.role=role;
-
-//     const isStudent = this.user.role.toLowerCase() === "student";
-//     const title = `${this.user.role} Login`;
-
-//     app.innerHTML = `
-//       <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
-//         <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
-//           <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
-//           <form id="loginForm" class="space-y-6">
-//             ${this.inputField('Institute', 'text')}
-//             ${isStudent 
-//               ? this.inputField('Roll Number', 'text') 
-//               : this.inputField('Name', 'text')}
-//             ${this.inputField('Password', 'password')}
-//             <button type="submit"
-//               class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
-//               Login
-//             </button>
-//           </form>
-//         </div>
-//       </div>
-//     `;
-
-//     document.getElementById('loginForm').onsubmit = e => {
-//       e.preventDefault();
-
-//       const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
-//       const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
-//       let id;
-
-//       if (isStudent) {
-//         id = document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim();
-//       } else {
-//         id = document.querySelector('#loginForm input[placeholder="Name"]').value.trim();
-//       }
-
-//       // Save user info
-//       this.user.id = id;
-//       this.user.institute = institute;
-
-      
+  // Apply dark theme CSS dynamically
+  Object.assign(suggestionsBox.style, {
+    background: 'rgba(31, 41, 55, 0.9)', // matches bg-gray-800/80
+    color: '#f9fafb',                     // text-white-like
+    border: '1px solid #4b5563',          // border-gray-700
+    borderRadius: '1rem',                  // same as login input radius
+    maxHeight: '200px',
+    overflowY: 'auto',
+    width: inputElement.offsetWidth + 'px',
+    display: 'none',
+    position: 'absolute',
+    zIndex: '50',
+    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)' // subtle shadow like card
+  });
 
 
-//       // Validation or authentication logic can go here
+  function positionSuggestions() {
+    suggestionsBox.style.top = (inputElement.offsetTop + inputElement.offsetHeight) + 'px';
+    suggestionsBox.style.left = inputElement.offsetLeft + 'px';
+    suggestionsBox.style.width = inputElement.offsetWidth + 'px';
+  }
 
-//       this.showEditor();
-//     };
-// }
+  positionSuggestions();
+  window.addEventListener('resize', positionSuggestions);
+
+  let selectedIndex = -1;
+
+  inputElement.addEventListener('input', async () => {
+    const value = inputElement.value.trim().toLowerCase();
+    if (!value) {
+      suggestionsBox.style.display = 'none';
+      suggestionsBox.innerHTML = '';
+      selectedIndex = -1;
+      return;
+    }
+
+    const institutes = await fetchInstitutesFunc();
+    const filtered = institutes.filter(name => name.toLowerCase().startsWith(value));
+
+    if (!filtered.length) {
+      suggestionsBox.style.display = 'none';
+      suggestionsBox.innerHTML = '';
+      selectedIndex = -1;
+      return;
+    }
+
+    suggestionsBox.innerHTML = filtered.map(name =>
+      `<div class="suggestion-item" style="padding:0.5rem 0.75rem; cursor:pointer;">${name}</div>`
+    ).join('');
+    suggestionsBox.style.display = 'block';
+    selectedIndex = -1;
+
+    const items = suggestionsBox.querySelectorAll('.suggestion-item');
+    items.forEach((item, index) => {
+      item.onmouseover = () => { selectedIndex = index; highlight(items, selectedIndex); };
+      item.onclick = () => { inputElement.value = item.textContent; suggestionsBox.style.display = 'none'; };
+    });
+  });
+
+  inputElement.addEventListener('keydown', e => {
+    const items = suggestionsBox.querySelectorAll('.suggestion-item');
+    if (!items.length) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex + 1) % items.length;
+      highlight(items, selectedIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+      highlight(items, selectedIndex);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0) {
+        inputElement.value = items[selectedIndex].textContent;
+        suggestionsBox.style.display = 'none';
+      }
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!suggestionsBox.contains(e.target) && e.target !== inputElement) {
+      suggestionsBox.style.display = 'none';
+      selectedIndex = -1;
+    }
+  });
+
+  function highlight(items, index) {
+    items.forEach((item, i) => item.style.background = i === index ? '#3a3a3a' : '#2b2b2b');
+  }
+}
+
+
 showLoginForm(role) {
   this.user.role = role;
   const isStudent = role === "student";
@@ -1798,46 +2078,45 @@ showLoginForm(role) {
 
   const app = document.getElementById('app');
   app.innerHTML = `
-  <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
-    <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
-      <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
-      <form id="loginForm" class="space-y-6">
-        ${this.inputField('Institute', 'text')}
-        ${isStudent ? this.inputField('Roll Number', 'text') : this.inputField('Email', 'email')}
-        ${this.inputField('Password', 'password')}
-        <button type="submit"
-          class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
-          Login
-        </button>
-        <button type="button" id="backBtn"
-          class="w-full py-4 px-6 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
-          Back
-        </button>
-      </form>
+    <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+      <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700 relative">
+        <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
+        <form id="loginForm" class="space-y-6">
+          ${this.inputField('Institute', 'text', 'instituteInput')}
+          ${isStudent ? this.inputField('Roll Number', 'text') : this.inputField('Email', 'email')}
+          ${this.inputField('Password', 'password')}
+          <button type="submit"
+            class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+            Login
+          </button>
+          <button type="button" id="backBtn"
+            class="w-full py-4 px-6 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
+            Back
+          </button>
+        </form>
+        <div id="suggestions" class="absolute bg-white text-black w-full mt-1 rounded shadow max-h-48 overflow-y-auto z-50 hidden"></div>
+      </div>
     </div>
-  </div>
-`;
+  `;
 
   // Bind Back button
   document.getElementById('backBtn').onclick = () => this.showWelcomePage();
 
+  // Setup autocomplete
+  const instituteInput = document.getElementById('loginForm').querySelector('input[placeholder="Institute"]');
+  this.setupInstituteAutocomplete(instituteInput, () => this.fetchInstitutesFromBackend());
+
+
+  // Form submit logic remains the same...
   document.getElementById('loginForm').onsubmit = async e => {
     e.preventDefault();
-
-    const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
+    const institute = instituteInput.value.trim();
     const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
-    const email_or_roll="";
-    // let payload = { institute, password, role };
+    const email_or_roll = isStudent
+      ? document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim()
+      : document.querySelector('#loginForm input[placeholder="Email"]').value.trim();
 
-          const payload = {
-        institute,
-        role,
-        email_or_roll: isStudent
-          ? document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim()
-          : document.querySelector('#loginForm input[placeholder="Email"]').value.trim(),
-        password
-      };
-
+    const payload = { institute, role, email_or_roll, password };
 
     try {
       const res = await fetch(`${this.base_server}/login`, {
@@ -1845,29 +2124,19 @@ showLoginForm(role) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      console.log("sent payload:", JSON.stringify(payload));
-      const data = await res.json().catch(() => null);
-      console.log("received payload:", data);
 
-      if (role === "student") {
-        this.user.id = data.data.student_id;
-        this.user.name = data.data.name;  // ✅ store student_name
-      } else {
-        this.user.id = data.data.email;   // ✅ use email for non-students
-      }
-      this.user.role=role;
+      const data = await res.json().catch(() => null);
 
       if (data?.success) {
-        
         this.user.institute = institute;
-        if (role === "student") this.user.name = data.data.name; // ✅ store student_name
-        console.log("logged in as:",this.user.id)
+        if (role === "student") this.user.name = data.data.name;
+        this.user.id = role === "student" ? data.data.student_id : data.data.email;
+        this.user.role = role;
         this.showEditor();
         this.showToast('✅ Login successful');
       } else {
         this.showToast(`❌ ${data?.message || 'Login failed'}`);
       }
-
     } catch (err) {
       console.error(err);
       this.showToast('❌ Login failed');
@@ -1876,44 +2145,162 @@ showLoginForm(role) {
 }
 
 
-  // showLoginForm(role) {
-  //   this.toggleEditorActions(false);
-  //   const app = document.getElementById('app');
-  //   app.innerHTML = `
-  //     <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
-  //       <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
-  //         <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${role} Login</h2>
-  //         <form id="loginForm" class="space-y-6">
-  //           ${this.inputField('Institute', 'text')}
-  //           ${this.inputField('Roll Number', 'text')}
-  //           ${this.inputField('Password', 'password')}
-  //           <button type="submit"
-  //             class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
-  //             Login
-  //           </button>
-  //         </form>
-  //       </div>
-  //     </div>
-  //   `;
-  //   document.getElementById('loginForm').onsubmit = e => {
-  //     e.preventDefault();
-  //     const roll_number = document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim();
-  //     const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
-  //     const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
 
-  //     // Optional: Add authentication logic here if needed.
+// showLoginForm(role) {
+//   this.user.role = role;
+//   const isStudent = role === "student";
+//   const title = `${role.charAt(0).toUpperCase() + role.slice(1)} Login`;
 
-  //     // Save user info
-  //     this.user.id = roll_number;
-  //     this.user.role = role;  // already passed as parameter
-  //     this.user.institute = institute;
+//   const app = document.getElementById('app');
+//   app.innerHTML = `
+//   <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+//     <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700">
+//       <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
+//       <form id="loginForm" class="space-y-6">
+//         ${this.inputField('Institute', 'text')}
+//         ${isStudent ? this.inputField('Roll Number', 'text') : this.inputField('Email', 'email')}
+//         ${this.inputField('Password', 'password')}
+//         <button type="submit"
+//           class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+//           Login
+//         </button>
+//         <button type="button" id="backBtn"
+//           class="w-full py-4 px-6 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
+//           Back
+//         </button>
+//       </form>
+//     </div>
+//   </div>
+// `;
 
-      
+//   // Bind Back button
+//   document.getElementById('backBtn').onclick = () => this.showWelcomePage();
 
-  //     // validation
-  //     this.showEditor();
-  //   };
-  // }
+//   document.getElementById('loginForm').onsubmit = async e => {
+//     e.preventDefault();
+
+//     const institute = document.querySelector('#loginForm input[placeholder="Institute"]').value.trim();
+//     const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
+//     const email_or_roll="";
+//     // let payload = { institute, password, role };
+
+//           const payload = {
+//         institute,
+//         role,
+//         email_or_roll: isStudent
+//           ? document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim()
+//           : document.querySelector('#loginForm input[placeholder="Email"]').value.trim(),
+//         password
+//       };
+
+
+//     try {
+//       const res = await fetch(`${this.base_server}/login`, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify(payload)
+//       });
+//       console.log("sent payload:", JSON.stringify(payload));
+//       const data = await res.json().catch(() => null);
+//       console.log("received payload:", data);
+
+//       if (role === "student") {
+//         this.user.id = data.data.student_id;
+//         this.user.name = data.data.name;  // ✅ store student_name
+//       } else {
+//         this.user.id = data.data.email;   // ✅ use email for non-students
+//       }
+//       this.user.role=role;
+
+//       if (data?.success) {
+        
+//         this.user.institute = institute;
+//         if (role === "student") this.user.name = data.data.name; // ✅ store student_name
+//         console.log("logged in as:",this.user.id)
+//         this.showEditor();
+//         this.showToast('✅ Login successful');
+//       } else {
+//         this.showToast(`❌ ${data?.message || 'Login failed'}`);
+//       }
+
+//     } catch (err) {
+//       console.error(err);
+//       this.showToast('❌ Login failed');
+//     }
+//   };
+// }
+
+
+logout() {
+
+  const topBar = document.getElementById('topBarUserInfo');
+  if (topBar) {
+    topBar.innerText = '';  // clear name and role
+  }
+
+    if (this.editorInstance) {
+    this.editorInstance.dispose();
+    this.editorInstance = null;
+  }
+
+  try {
+    // 1️⃣ Abort any ongoing operations
+    if (this.copilot?.abort) this.copilot.abort();  // example: abort copilot task
+    if (this.currentFetchController) this.currentFetchController.abort();
+
+    // 2️⃣ Reset user info
+    this.user = {
+      name: '',
+      id: '',
+      role: '',
+      institute: ''
+    };
+
+    // 3️⃣ Reset editor state
+    this.tabs = [];
+    this.activeTabIndex = -1;
+    this.untitledCounter = 1;
+    this.sidebarFiles = [];
+    this.currentFolderPath = null;
+    this.openedFilePaths = [];
+    this.outputs = "";
+    this.copilot = null;
+
+    // 4️⃣ Clear persistent storage if used
+    localStorage.removeItem('user');
+    localStorage.removeItem('editorState');
+    sessionStorage.clear();
+
+    // 5️⃣ Reset topbar menu items
+    const fileMenu = document.getElementById('fileMenu');
+    if (fileMenu) {
+      fileMenu.querySelectorAll('[data-action]').forEach(item => {
+        // Hide all login-dependent actions
+        const roleActions = ["exportFile", "viewJoinRequests", "viewMySubmissions", "logout"];
+        if (roleActions.includes(item.dataset.action)) item.classList.add('hidden');
+      });
+    }
+
+    // 6️⃣ Clear editor UI
+    const editorContainer = document.getElementById('editorContainer');
+    if (editorContainer) editorContainer.innerHTML = '';
+
+    // 7️⃣ Clear sidebar
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.innerHTML = '';
+
+    // 8️⃣ Show welcome page
+    this.showWelcomePage();
+
+    // 9️⃣ Notify user
+    this.showToast('✅ Logged out successfully');
+  } catch (err) {
+    console.error("Error during logout:", err);
+    this.showToast('⚠️ Logout encountered an issue. Please refresh.');
+  }
+}
+
+
 
   inputField(label, type) {
     return `
@@ -1958,26 +2345,28 @@ showLoginForm(role) {
           };
         }
 
-        const vjrBtn = document.getElementById('viewJoinRequestsBtn');
-      if (this.user.role === 'teacher') {
-        vjrBtn.classList.remove('hidden');
-        // vjrBtn.onclick = this.askSubjectAndViewRequests().bind(this);
-        vjrBtn.onclick = () => {
-          // this.viewJoinRequests();
-        this.askSubjectAndViewRequests()
+        this.initFileMenuUserActions(); 
+
+      //   const vjrBtn = document.getElementById('viewJoinRequestsBtn');
+      // if (this.user.role === 'teacher') {
+      //   vjrBtn.classList.remove('hidden');
+      //   // vjrBtn.onclick = this.askSubjectAndViewRequests().bind(this);
+      //   vjrBtn.onclick = () => {
+      //     // this.viewJoinRequests();
+      //   this.askSubjectAndViewRequests()
           
-        };
-      }
+      //   };
+      // }
 
 
-      // view my submissiion button only for student guest
-    const vmBtn = document.getElementById('viewMySubmissionsBtn');
-    if (this.user.role != 'teacher') {
-      vmBtn.classList.remove('hidden');
-      vmBtn.onclick = () => {
-        this.viewMySubmissions();
-      };
-    };
+    //   // view my submissiion button only for student guest
+    // const vmBtn = document.getElementById('viewMySubmissionsBtn');
+    // if (this.user.role != 'teacher') {
+    //   vmBtn.classList.remove('hidden');
+    //   vmBtn.onclick = () => {
+    //     this.viewMySubmissions();
+    //   };
+    // };
     
     const vcBtn = document.getElementById('viewClassSubmissionsBtn');
     if (this.user.role === 'teacher') {
@@ -2439,42 +2828,11 @@ async saveCurrentFile() {
   } else {
     // CASE 2: Already saved file
     const success = await window.electronAPI.saveFile(activeTab.filePath, content);
-    if (!success) alert('Failed to save file.');
+    if (!success) this.showToast('Failed to save file.');
   }
 }
 
 
-
-// enableInlineRename(fileItem, file) {
-//   fileItem.ondblclick = () => {
-//     const input = document.createElement('input');
-//     input.type = 'text';
-//     input.value = file.name;
-//     input.className = 'bg-gray-800 text-white p-1 rounded w-full';
-
-//     input.onblur = () => {
-//       const newName = input.value.trim();
-//       if (newName && newName !== file.name) {
-//         file.name = newName;
-//         fileItem.textContent = newName;
-
-//         // Update tab name if it’s unsaved
-//         const tabIndex = this.tabs.findIndex(tab => tab.filePath === file.path || (!file.path && tab.name === file.name));
-//         if (tabIndex !== -1) {
-//           const tabBtn = document.querySelectorAll('.tab-item')[tabIndex];
-//           if (tabBtn) tabBtn.innerText = newName;
-//           this.tabs[tabIndex].name = newName;
-//         }
-//       } else {
-//         fileItem.textContent = file.name;
-//       }
-//     };
-
-//     fileItem.innerHTML = '';
-//     fileItem.appendChild(input);
-//     input.focus();
-//   };
-// }
 
 enableInlineRename(fileItem, file) {
   fileItem.ondblclick = () => {
@@ -2576,14 +2934,7 @@ refreshSidebar() {
 
 
 async runCode() {
-  // const outputArea = document.getElementById('output');
-  // if (!outputArea) return;
-
-  // const currentTab = window.editorState?.tabs?.[window.editorState.activeTabIndex];
-  // if (!currentTab || !window.editorInstance) {
-  //   outputArea.innerText = "⚠️ No active file to run.";
-  //   return;
-  // }
+  
 
     const outputArea = document.getElementById('output');
     if (!outputArea) return;
@@ -2775,6 +3126,12 @@ async runCode() {
 
   setupEditor() {
     const editorContainer = document.getElementById('editor');
+    //delete previous editor instance if any
+    if (this.editorInstance) {
+    this.editorInstance.dispose();
+    this.editorInstance = null;
+  }
+
 
   //   const activeTab = this.tabs[this.activeTabIndex];
   //   if (!activeTab) {
@@ -2969,7 +3326,7 @@ async fetchCopilotResponse(prompt) {
 setupSplit() {
   // Sidebar and Main
   Split(['#sidebar', '#mainWithCopilot'], {
-    sizes: [20, 80],
+    sizes: [10, 80],
     minSize: 150,
     gutterSize: 4,
     elementStyle: (dimension, size, gutterSize) => ({
