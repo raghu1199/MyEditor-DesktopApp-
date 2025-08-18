@@ -62,6 +62,7 @@ class CodeEditorApp {
     this.loadapi();
     this.facultyCache = new Map();  // key = institute, value = [faculties]
     this.subjectCache = new Map();  // key = `${institute}_${faculty}`, value = [subjects]
+    this.classCache = new Map();  // key = `${institute}_${faculty}`, value = [subjects]
 
     
   }
@@ -451,24 +452,36 @@ initFileMenuUserActions() {
 
 
 
-showQuestionModal() {
+async showQuestionModal() {
+  // remove any leftover suggestion lists
+  ["faculty-list", "subject-list", "class-list"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+
   let modal = document.getElementById("getQuestionModal");
 
   // Create modal if it doesn't exist
   if (!modal) {
     const modalHTML = `
       <div id="getQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
-        <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
+        <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96 relative">
           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Get Question</h2>
           
           <label class="block text-sm text-white mb-1">Faculty:</label>
-          <input id="facultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+          <div class="relative w-full mb-4">
+            <input id="facultyInput" type="text" autocomplete="off" spellcheck="false" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+          </div>
 
           <label class="block text-sm text-white mb-1">Subject:</label>
-          <input id="subjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+          <div class="relative w-full mb-4">
+            <input id="subjectInput" type="text" autocomplete="off" spellcheck="false" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+          </div>
 
           <label class="block text-sm text-white mb-1">Class ID:</label>
-          <input id="classIdInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+          <div class="relative w-full mb-4">
+            <input id="classIdInput" type="text" autocomplete="off" spellcheck="false" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+          </div>
 
           <div class="flex justify-end space-x-2">
             <button id="cancelQuestionBtn" class="text-white hover:text-red-400">Cancel</button>
@@ -487,29 +500,142 @@ showQuestionModal() {
   const cancelBtn = document.getElementById("cancelQuestionBtn");
   const fetchBtn = document.getElementById("fetchQuestionBtn");
 
-  // Reset input fields and show modal
+  // Reset fields and show modal
   facultyInput.value = "";
   subjectInput.value = "";
   classIdInput.value = "";
   modal.classList.remove("hidden");
   modal.classList.add("flex");
 
-  cancelBtn.onclick = () => {
-    modal.classList.add("hidden");
-    modal.classList.remove("flex");
+  // small helpers
+  const cleanupLists = () => {
+    ["faculty-list", "subject-list", "class-list"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
   };
 
+  const onFacultyChangeClear = () => {
+    // when faculty changes, subject and class must be cleared
+    subjectInput.value = "";
+    classIdInput.value = "";
+    const s = document.getElementById("subject-list"); if (s) s.remove();
+    const c = document.getElementById("class-list"); if (c) c.remove();
+  };
+
+  const onSubjectChangeClear = () => {
+    // when subject changes, class must be cleared
+    classIdInput.value = "";
+    const c = document.getElementById("class-list"); if (c) c.remove();
+  };
+
+  // Hook up your existing autocomplete functions (they will append dropdowns to input.parentNode)
+  try {
+    cleanupLists();
+    // ensure we pass the same institute & base_server you use elsewhere
+    const institute = this.user?.institute;
+    const base_server = this.base_server;
+
+    // use your already-built functions
+    this.setupFacultyAutocomplete(facultyInput, institute, base_server);
+    this.setupSubjectAutocomplete(subjectInput, institute, facultyInput, base_server);
+    this.setupClassAutocomplete(classIdInput, institute, facultyInput, subjectInput, base_server);
+
+    // clear dependent fields when parent changes
+    facultyInput.addEventListener("input", onFacultyChangeClear);
+    subjectInput.addEventListener("input", onSubjectChangeClear);
+  } catch (err) {
+    console.error("Error initializing autocompletes:", err);
+  }
+
+  // Cancel button: cleanup and close
+  cancelBtn.onclick = () => {
+    cleanupLists();
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+    facultyInput.removeEventListener("input", onFacultyChangeClear);
+    subjectInput.removeEventListener("input", onSubjectChangeClear);
+  };
+
+  // Fetch button: validate + call fetchQuestion
   fetchBtn.onclick = () => {
     const faculty = facultyInput.value.trim();
     const subject = subjectInput.value.trim();
     const classId = classIdInput.value.trim();
 
+    // cleanup UI, remove modal
+    cleanupLists();
     modal.classList.add("hidden");
     modal.classList.remove("flex");
+    facultyInput.removeEventListener("input", onFacultyChangeClear);
+    subjectInput.removeEventListener("input", onSubjectChangeClear);
 
     this.fetchQuestion(faculty, subject, classId);
   };
 }
+
+
+
+
+// showQuestionModal() {
+//   let modal = document.getElementById("getQuestionModal");
+
+//   // Create modal if it doesn't exist
+//   if (!modal) {
+//     const modalHTML = `
+//       <div id="getQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
+//         <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
+//           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Get Question</h2>
+          
+//           <label class="block text-sm text-white mb-1">Faculty:</label>
+//           <input id="facultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
+//           <label class="block text-sm text-white mb-1">Subject:</label>
+//           <input id="subjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
+//           <label class="block text-sm text-white mb-1">Class ID:</label>
+//           <input id="classIdInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
+//           <div class="flex justify-end space-x-2">
+//             <button id="cancelQuestionBtn" class="text-white hover:text-red-400">Cancel</button>
+//             <button id="fetchQuestionBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Fetch</button>
+//           </div>
+//         </div>
+//       </div>
+//     `;
+//     document.body.insertAdjacentHTML("beforeend", modalHTML);
+//     modal = document.getElementById("getQuestionModal");
+//   }
+
+//   const facultyInput = document.getElementById("facultyInput");
+//   const subjectInput = document.getElementById("subjectInput");
+//   const classIdInput = document.getElementById("classIdInput");
+//   const cancelBtn = document.getElementById("cancelQuestionBtn");
+//   const fetchBtn = document.getElementById("fetchQuestionBtn");
+
+//   // Reset input fields and show modal
+//   facultyInput.value = "";
+//   subjectInput.value = "";
+//   classIdInput.value = "";
+//   modal.classList.remove("hidden");
+//   modal.classList.add("flex");
+
+//   cancelBtn.onclick = () => {
+//     modal.classList.add("hidden");
+//     modal.classList.remove("flex");
+//   };
+
+//   fetchBtn.onclick = () => {
+//     const faculty = facultyInput.value.trim();
+//     const subject = subjectInput.value.trim();
+//     const classId = classIdInput.value.trim();
+
+//     modal.classList.add("hidden");
+//     modal.classList.remove("flex");
+
+//     this.fetchQuestion(faculty, subject, classId);
+//   };
+// }
 
 async fetchQuestion(faculty, subject, classId) {
   const institute = this.user.institute || '';
@@ -561,104 +687,6 @@ async fetchQuestion(faculty, subject, classId) {
 
 
 
-// showQuestionModal() {
-//   let modal = document.getElementById("getQuestionModal");
-
-//   // Create modal if it doesn't exist
-//   if (!modal) {
-//     const modalHTML = `
-//       <div id="getQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
-//         <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
-//           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Get Question</h2>
-//           <label class="block text-sm text-white mb-1">Faculty:</label>
-//           <input id="facultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
-//           <label class="block text-sm text-white mb-1">Subject:</label>
-//           <input id="subjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
-//           <div class="flex justify-end space-x-2">
-//             <button id="cancelQuestionBtn" class="text-white hover:text-red-400">Cancel</button>
-//             <button id="fetchQuestionBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Fetch</button>
-//           </div>
-//         </div>
-//       </div>
-//     `;
-//     document.body.insertAdjacentHTML("beforeend", modalHTML);
-//     modal = document.getElementById("getQuestionModal");
-//   }
-
-//   const facultyInput = document.getElementById("facultyInput");
-//   const subjectInput = document.getElementById("subjectInput");
-//   const cancelBtn = document.getElementById("cancelQuestionBtn");
-//   const fetchBtn = document.getElementById("fetchQuestionBtn");
-
-//   // Reset input fields and show modal
-//   facultyInput.value = "";
-//   subjectInput.value = "";
-//   modal.classList.remove("hidden");
-//   modal.classList.add("flex");
-
-//   cancelBtn.onclick = () => {
-//     modal.classList.add("hidden");
-//     modal.classList.remove("flex");
-//   };
-
-//   fetchBtn.onclick = () => {
-//     const faculty = facultyInput.value.trim();
-//     const subject = subjectInput.value.trim();
-//     modal.classList.add("hidden");
-//     modal.classList.remove("flex");
-//     this.fetchQuestion(faculty, subject);
-//   };
-// }
-
-// async fetchQuestion(faculty, subject) {
-//   const institute = this.user.institute || '';
-//   if (!faculty || !subject || !institute) {
-//     this.showToast("Faculty, subject, or institute is missing.");
-//     return;
-//   }
-
-//   try {
-//     const response = await fetch(`${this.base_server}/get_question?faculty=${faculty}&subject=${subject}&institute=${institute}`);
-//     if (!response.ok) throw new Error(await response.text());
-
-//     const data = await response.json();
-//     const questionText = data.question || "No question returned.";
-
-//     const folderPath = await window.electronAPI.saveQuestionFiles({ questionText });
-//     if (!folderPath) throw new Error("Failed to save question files.");
-
-//     const refreshed = await window.electronAPI.getFolderTree(folderPath);
-//     if (!refreshed) {
-//       console.error("getFolderTree returned null. Path:", folderPath);
-//       this.showToast("Failed to load folder structure.");
-//       return;
-//     }
-
-//     this.currentFolderPath = folderPath;
-
-//     setTimeout(() => {
-
-//     requestIdleCallback(() => {
-//       console.log("before sidebar load");
-//       this.loadFolderToSidebar(refreshed);
-//       console.log("before sidebar load");
-
-//       // Show alert only after DOM paints
-//       requestAnimationFrame(() => {
-//         setTimeout(() => {
-//           // alert(".");
-//           this.showToast("✅ Question folder created and loaded!");
-
-//         }, 50);
-//       });
-//     });
-//   }, 100); 
-
-//   } catch (error) {
-//     console.error("Fetch error:", error);
-//     this.showToast("Failed to fetch question: " + error.message);
-//   }
-// }
 
 showToast(message, duration = 2500) {
   const toast = document.createElement('div');
@@ -798,6 +826,55 @@ async setupSubjectAutocomplete(inputEl, institute, facultyInput, base_server) {
 }
 
 
+async setupClassAutocomplete(inputEl, institute, facultyInput, subjectInput, base_server) {
+  inputEl.addEventListener("input", async () => {
+    const query = inputEl.value.trim().toLowerCase();
+    const faculty = facultyInput.value.trim();
+    const subject = subjectInput.value.trim();
+    if (!query || !faculty || !subject) return;
+
+    try {
+      const key = `${institute}_${faculty}_${subject}`;
+      let classes;
+      if (this.classCache?.has(key)) {
+        classes = this.classCache.get(key);
+      } else {
+        const res = await fetch(`${base_server}/get-classes/${encodeURIComponent(institute)}/${encodeURIComponent(faculty)}/${subject}`);
+        const data = await res.json();
+        classes = data.classes || [];
+        if (!this.classCache) this.classCache = new Map();
+        this.classCache.set(key, classes);
+      }
+
+      // Filter locally
+      const filtered = classes.filter(c => c.toLowerCase().includes(query));
+
+      let list = document.getElementById("class-list");
+      if (!list) {
+        list = document.createElement("div");
+        list.id = "class-list";
+        list.className = "absolute bg-[#444] border border-gray-600 mt-1 w-full max-h-40 overflow-y-auto rounded z-50";
+        inputEl.parentNode.appendChild(list);
+      }
+      list.innerHTML = "";
+
+      filtered.forEach(c => {
+        const option = document.createElement("div");
+        option.className = "p-2 cursor-pointer hover:bg-[#555]";
+        option.textContent = c;
+        option.onclick = () => {
+          inputEl.value = c;
+          list.innerHTML = "";
+        };
+        list.appendChild(option);
+      });
+    } catch (err) {
+      console.error("Error fetching classes:", err);
+    }
+  });
+}
+
+
 async joinClass() {
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
@@ -868,78 +945,6 @@ async joinClass() {
 }
 
 
-// async joinClass() {
-//     const modal = document.createElement("div");
-//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
-//     modal.innerHTML = `
-//         <div class="bg-[#333333] rounded-lg mt-20 w-[600px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
-//             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">Join Class</h2>
-
-//             <label class="block mb-2 font-medium">Faculty:</label>
-//             <input type="text" id="faculty" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
-
-//             <label class="block mb-2 font-medium">Subject:</label>
-//             <input type="text" id="subject" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
-
-//             <button id="joinClassBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Join</button>
-
-//             <button id="closeJoinModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
-//         </div>
-//     `;
-//     document.body.appendChild(modal);
-
-//     // Close modal
-//     document.getElementById("closeJoinModalBtn").onclick = () => modal.remove();
-
-//     // Handle Join
-//     document.getElementById("joinClassBtn").onclick = async () => {
-//         const faculty = document.getElementById("faculty").value.trim();
-//         const subject = document.getElementById("subject").value.trim();
-
-//         // ✅ student details from this.user
-//         const student_id = this.user.id;
-//         const student_name = this.user.name || ""; // optional
-//         const institute = this.user.institute;
-
-//         if (!faculty || !subject) {
-//             this.showToast("Please fill all fields.");
-//             return;
-//         }
-
-//         try {
-//             const res = await fetch(`${this.base_server}/join-class`, {
-//                 method: "POST",
-//                 headers: { "Content-Type": "application/json" },
-//                 body: JSON.stringify({
-//                     student_id,
-//                     student_name,
-//                     college: institute,
-//                     faculty,
-//                     subject
-//                 })
-//             });
-//               console.log("in join class renderer sent:",JSON.stringify({
-//                     student_id,
-//                     student_name,
-//                     college: institute,
-//                     faculty,
-//                     subject
-//                 }));
-//             const data = await res.json();
-//             console.log("in join class recieved:",data);
-
-//             if (data.message) {
-//                 this.showToast("✅"||data.message);
-//                 modal.remove();
-//             } else {
-//                 this.showToast(data.message || "Failed to join class.");
-//             }
-//         } catch (err) {
-//             this.showToast("Error joining class.");
-//             console.error(err);
-//         }
-//     };
-// }
 
 
 async askSubjectAndViewRequests() {
@@ -1050,9 +1055,13 @@ async askSubjectAndViewRequests() {
 }
 
 
-
-
 async viewMySubmissions() {
+    // remove any leftover lists from other modals
+    const oldFacultyList = document.getElementById("faculty-list");
+    if (oldFacultyList) oldFacultyList.remove();
+    const oldSubjectList = document.getElementById("subject-list");
+    if (oldSubjectList) oldSubjectList.remove();
+
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
     modal.innerHTML = `
@@ -1060,25 +1069,73 @@ async viewMySubmissions() {
             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View My Submissions</h2>
 
             <label class="block mb-2 font-medium">Faculty:</label>
-            <input type="text" id="faculty" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            <div class="relative w-full mb-4">
+                <input type="text" id="faculty" 
+                    class="w-full p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            </div>
 
             <label class="block mb-2 font-medium">Subject:</label>
-            <input type="text" id="subject" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            <div class="relative w-full mb-6">
+                <input type="text" id="subject" 
+                    class="w-full p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            </div>
 
-            <button id="loadReportsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Load My Reports</button>
+            <button id="loadReportsBtn" 
+                class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">
+                Load My Reports
+            </button>
 
-            <button id="closeModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+            <button id="closeModalBtn" 
+                class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
         </div>
     `;
     document.body.appendChild(modal);
 
-    document.getElementById("closeModalBtn").onclick = () => modal.remove();
+    const facultyInput = document.getElementById("faculty");
+    const subjectInput = document.getElementById("subject");
+    const closeBtn = document.getElementById("closeModalBtn");
+    const loadBtn = document.getElementById("loadReportsBtn");
 
-    document.getElementById("loadReportsBtn").onclick = async () => {
+    // Clean up suggestion lists before setting up new autocomplete
+    const cleanupLists = () => {
+        const f = document.getElementById("faculty-list");
+        if (f) f.remove();
+        const s = document.getElementById("subject-list");
+        if (s) s.remove();
+    };
+
+    // If faculty changes, clear subject to avoid mismatch
+    const onFacultyChangeClearSubject = () => {
+        subjectInput.value = "";
+        const s = document.getElementById("subject-list");
+        if (s) s.remove();
+    };
+
+    // Hook up autocomplete using your functions
+    try {
+        cleanupLists();
+
+        this.setupFacultyAutocomplete(facultyInput, this.user.institute, this.base_server);
+        this.setupSubjectAutocomplete(subjectInput, this.user.institute, facultyInput, this.base_server);
+
+        facultyInput.addEventListener("input", onFacultyChangeClearSubject);
+    } catch (err) {
+        console.error("Error initializing autocompletes:", err);
+    }
+
+    // Close modal and cleanup
+    closeBtn.onclick = () => {
+        cleanupLists();
+        modal.remove();
+        facultyInput.removeEventListener("input", onFacultyChangeClearSubject);
+    };
+
+    // Load reports handler
+    loadBtn.onclick = async () => {
         const college = this.user.institute;
-        const faculty = document.getElementById("faculty").value.trim();
-        const subject = document.getElementById("subject").value.trim();
-        const student_id = this.user.id; // ✅ using student_id now
+        const faculty = facultyInput.value.trim();
+        const subject = subjectInput.value.trim();
+        const student_id = this.user.id; // ✅ using student_id
 
         if (!college || !faculty || !subject || !student_id) {
             this.showToast("Please fill all fields.");
@@ -1087,12 +1144,15 @@ async viewMySubmissions() {
 
         try {
             const res = await fetch(
-                `${this.base_server}/get-my-reports?college=${college}&faculty=${faculty}&subject=${subject}&student_id=${student_id}`
+                `${this.base_server}/get-my-reports?college=${encodeURIComponent(college)}&faculty=${encodeURIComponent(faculty)}&subject=${encodeURIComponent(subject)}&student_id=${encodeURIComponent(student_id)}`
             );
             const data = await res.json();
             const reports = data.reports || [];
 
-            modal.remove(); // remove the input modal
+            cleanupLists();
+            modal.remove();
+            facultyInput.removeEventListener("input", onFacultyChangeClearSubject);
+
             this.showReportViewerModal(subject, reports, college, faculty, student_id);
         } catch (err) {
             this.showToast("Failed to load reports.");
@@ -1100,6 +1160,8 @@ async viewMySubmissions() {
         }
     };
 }
+
+
 
 showReportViewerModal(subject, reports, college, faculty, student_id) {
     const modal = document.createElement("div");
@@ -1340,25 +1402,40 @@ async viewClassSubmissions() {
             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">View Class Submissions</h2>
 
             <label class="block mb-2 font-medium">Subject:</label>
-            <input type="text" id="subject" class="w-full mb-4 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            <div class="relative w-full mb-4">
+                <input type="text" id="subject" class="w-full p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            </div>
 
             <label class="block mb-2 font-medium">Class:</label>
-            <input type="text" id="classId" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            <div class="relative w-full mb-6">
+                <input type="text" id="classId" class="w-full p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            </div>
 
             <button id="loadClassReportsBtn" class="w-full bg-[#61dafb] text-[#000] font-semibold py-2 rounded hover:bg-[#21a1f1]">Load Class Reports</button>
-
             <button id="closeModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
         </div>
     `;
     document.body.appendChild(modal);
 
-    modal.querySelector("#closeModalBtn").onclick = () => modal.remove();
+    const subjectInput = modal.querySelector("#subject");
+    const classInput = modal.querySelector("#classId");
+    const closeBtn = modal.querySelector("#closeModalBtn");
+    const loadBtn = modal.querySelector("#loadClassReportsBtn");
 
-    modal.querySelector("#loadClassReportsBtn").onclick = async () => {
-        const college = this.user.institute;
-        const faculty = this.user.id; // teacher's ID
-        const subject = document.getElementById("subject").value.trim();
-        const classId = document.getElementById("classId").value.trim();
+    const college = this.user.institute;
+    const faculty = this.user.id; // teacher's ID
+
+    // Hook up autocomplete with proper suggestion positioning
+    this.setupSubjectAutocomplete(subjectInput, college, { value: faculty }, this.base_server);
+    this.setupClassAutocomplete(classInput, college, { value: faculty }, subjectInput, this.base_server);
+
+    // Close modal
+    closeBtn.onclick = () => modal.remove();
+
+    // Load reports handler
+    loadBtn.onclick = async () => {
+        const subject = subjectInput.value.trim();
+        const classId = classInput.value.trim();
 
         if (!college || !faculty || !subject || !classId) {
             this.showToast("Please fill all fields.");
@@ -1488,7 +1565,6 @@ showClassReportViewerModal(subject, reports, college, faculty, classId) {
 
 
 
-
 async generateMarksReport() {
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
@@ -1498,7 +1574,9 @@ async generateMarksReport() {
             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">Generate Marks Report</h2>
 
             <label class="block mb-2 font-medium">Subject:</label>
-            <input type="text" id="subjectInput" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            <div class="relative w-full mb-6">
+                <input type="text" id="subjectInput" class="w-full p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+            </div>
 
             <button id="generateExcelBtn" class="w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">Generate Excel</button>
 
@@ -1508,12 +1586,17 @@ async generateMarksReport() {
 
     document.body.appendChild(modal);
 
+    const subjectInput = document.getElementById("subjectInput");
+    const college = this.user.institute;
+    const faculty = this.user.id;
+
+    // Hook up autocomplete for subject
+    this.setupSubjectAutocomplete(subjectInput, college, { value: faculty }, this.base_server);
+
     modal.querySelector("#closeModalBtn").onclick = () => modal.remove();
 
     modal.querySelector("#generateExcelBtn").onclick = async () => {
-        const subject = document.getElementById("subjectInput").value.trim();
-        const college = this.user.institute;
-        const faculty = this.user.id; // teacher's ID
+        const subject = subjectInput.value.trim();
 
         if (!college || !faculty || !subject) {
             this.showToast("Please enter the subject.");
@@ -1551,6 +1634,66 @@ async generateMarksReport() {
 
 
 
+// async generateMarksReport() {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-20 w-[500px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-2xl font-bold text-[#61dafb] mb-6 text-center">Generate Marks Report</h2>
+
+//             <label class="block mb-2 font-medium">Subject:</label>
+//             <input type="text" id="subjectInput" class="w-full mb-6 p-2 rounded bg-[#444] border border-gray-600 focus:outline-none" />
+
+//             <button id="generateExcelBtn" class="w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">Generate Excel</button>
+
+//             <button id="closeModalBtn" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+
+//     document.body.appendChild(modal);
+
+//     modal.querySelector("#closeModalBtn").onclick = () => modal.remove();
+
+//     modal.querySelector("#generateExcelBtn").onclick = async () => {
+//         const subject = document.getElementById("subjectInput").value.trim();
+//         const college = this.user.institute;
+//         const faculty = this.user.id; // teacher's ID
+
+//         if (!college || !faculty || !subject) {
+//             this.showToast("Please enter the subject.");
+//             return;
+//         }
+
+//         try {
+//             const res = await fetch(`${this.base_server}/generate_marks_excel`, {
+//                 method: "POST",
+//                 headers: { "Content-Type": "application/json" },
+//                 body: JSON.stringify({ college, faculty, subject })
+//             });
+
+//             if (!res.ok) throw new Error("Failed to generate Excel");
+
+//             // Blob download
+//             const blob = await res.blob();
+//             const url = window.URL.createObjectURL(blob);
+//             const a = document.createElement("a");
+//             a.href = url;
+//             a.download = `${subject}_marks.xlsx`;
+//             document.body.appendChild(a);
+//             a.click();
+//             a.remove();
+//             window.URL.revokeObjectURL(url);
+
+//             this.showToast("Excel file generated successfully!");
+//             modal.remove();
+//         } catch (err) {
+//             console.error(err);
+//             this.showToast("Failed to generate report.");
+//         }
+//     };
+// }
+
 
 
 async showPostQuestionModal() {
@@ -1558,15 +1701,19 @@ async showPostQuestionModal() {
 
   if (!modal) {
     const modalHTML = `
-      <div id="postQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
-        <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
+      <div id="postQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-start z-50">
+        <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96 mt-20">
           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Post a Question</h2>
           
           <label class="block text-sm text-white mb-1">Subject:</label>
-          <input id="postSubjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+          <div class="relative w-full mb-4">
+            <input id="postSubjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white" />
+          </div>
 
           <label class="block text-sm text-white mb-1">Class ID:</label>
-          <input id="postClassIdInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+          <div class="relative w-full mb-4">
+            <input id="postClassIdInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white" />
+          </div>
 
           <label class="block text-sm text-white mb-1">Question:</label>
           <textarea id="postQuestionInput" rows="4" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4 resize-none"></textarea>
@@ -1585,8 +1732,18 @@ async showPostQuestionModal() {
   modal.classList.remove("hidden");
   modal.classList.add("flex");
 
+  const subjectInput = document.getElementById("postSubjectInput");
+  const classInput = document.getElementById("postClassIdInput");
+  const questionInput = document.getElementById("postQuestionInput");
   const cancelBtn = document.getElementById("cancelPostBtn");
   const submitBtn = document.getElementById("submitPostBtn");
+
+  const institute = this.user.institute;
+  const faculty = this.user.id;
+
+  // Hook up autocomplete
+  this.setupSubjectAutocomplete(subjectInput, institute, { value: faculty }, this.base_server);
+  this.setupClassAutocomplete(classInput, institute, { value: faculty }, subjectInput, this.base_server);
 
   cancelBtn.onclick = () => {
     modal.classList.add("hidden");
@@ -1594,12 +1751,9 @@ async showPostQuestionModal() {
   };
 
   submitBtn.onclick = async () => {
-    const subject = document.getElementById("postSubjectInput").value.trim();
-    const classId = document.getElementById("postClassIdInput").value.trim();
-    const questionText = document.getElementById("postQuestionInput").value.trim();
-
-    const faculty = this.user.id;
-    const institute = this.user.institute;
+    const subject = subjectInput.value.trim();
+    const classId = classInput.value.trim();
+    const questionText = questionInput.value.trim();
 
     if (!subject || !classId || !questionText || !faculty || !institute) {
       this.showToast("❌ Please fill all fields before submitting.");
@@ -1632,8 +1786,6 @@ async showPostQuestionModal() {
 
 
 
-
-
 // async showPostQuestionModal() {
 //   let modal = document.getElementById("postQuestionModal");
 
@@ -1642,10 +1794,16 @@ async showPostQuestionModal() {
 //       <div id="postQuestionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
 //         <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
 //           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Post a Question</h2>
+          
 //           <label class="block text-sm text-white mb-1">Subject:</label>
 //           <input id="postSubjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
+//           <label class="block text-sm text-white mb-1">Class ID:</label>
+//           <input id="postClassIdInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+
 //           <label class="block text-sm text-white mb-1">Question:</label>
 //           <textarea id="postQuestionInput" rows="4" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4 resize-none"></textarea>
+
 //           <div class="flex justify-end space-x-2">
 //             <button id="cancelPostBtn" class="text-white hover:text-red-400">Cancel</button>
 //             <button id="submitPostBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Submit</button>
@@ -1670,13 +1828,14 @@ async showPostQuestionModal() {
 
 //   submitBtn.onclick = async () => {
 //     const subject = document.getElementById("postSubjectInput").value.trim();
+//     const classId = document.getElementById("postClassIdInput").value.trim();
 //     const questionText = document.getElementById("postQuestionInput").value.trim();
 
-//     const faculty = this.user.name;
+//     const faculty = this.user.id;
 //     const institute = this.user.institute;
 
-//     if (!subject || !questionText || !faculty || !institute) {
-//       this.showToast("❌Please fill all fields before submitting.");
+//     if (!subject || !classId || !questionText || !faculty || !institute) {
+//       this.showToast("❌ Please fill all fields before submitting.");
 //       return;
 //     }
 
@@ -1684,7 +1843,7 @@ async showPostQuestionModal() {
 //       const response = await fetch(`${this.base_server}/post_question`, {
 //         method: "POST",
 //         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ subject, faculty, question: questionText, institute })
+//         body: JSON.stringify({ subject, classId, faculty, question: questionText, institute })
 //       });
 
 //       if (!response.ok) {
@@ -1704,6 +1863,10 @@ async showPostQuestionModal() {
 // }
 
 
+
+
+
+
 async showUploadSessionModal() {
   let modal = document.getElementById("uploadSessionModal");
 
@@ -1714,13 +1877,19 @@ async showUploadSessionModal() {
           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Upload Session</h2>
           
           <label class="block text-sm text-white mb-1">Faculty:</label>
-          <input id="uploadFacultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+          <div class="relative w-full mb-4">
+            <input id="uploadFacultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+          </div>
 
           <label class="block text-sm text-white mb-1">Subject:</label>
-          <input id="uploadSubjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+          <div class="relative w-full mb-4">
+            <input id="uploadSubjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+          </div>
 
           <label class="block text-sm text-white mb-1">Class:</label>
-          <input id="uploadClassInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white mb-4">
+          <div class="relative w-full mb-4">
+            <input id="uploadClassInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+          </div>
 
           <div class="flex justify-end space-x-2">
             <button id="cancelUploadBtn" class="text-white hover:text-red-400">Cancel</button>
@@ -1736,18 +1905,55 @@ async showUploadSessionModal() {
   modal.classList.remove("hidden");
   modal.classList.add("flex");
 
+  const facultyInput = document.getElementById("uploadFacultyInput");
+  const subjectInput = document.getElementById("uploadSubjectInput");
+  const classInput = document.getElementById("uploadClassInput");
+
+  // ✅ Clean up dropdown lists
+  const cleanupLists = () => {
+    ["faculty-list", "subject-list", "class-list"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
+  };
+
+  // ✅ Clear subject + class when faculty changes
+  facultyInput.addEventListener("input", () => {
+    subjectInput.value = "";
+    classInput.value = "";
+    cleanupLists();
+  });
+
+  // ✅ Clear class when subject changes
+  subjectInput.addEventListener("input", () => {
+    classInput.value = "";
+    const c = document.getElementById("class-list");
+    if (c) c.remove();
+  });
+
+  // ✅ Setup autocomplete
+  try {
+    cleanupLists();
+    this.setupFacultyAutocomplete(facultyInput, this.user.institute, this.base_server);
+    this.setupSubjectAutocomplete(subjectInput, this.user.institute, facultyInput, this.base_server);
+    this.setupClassAutocomplete(classInput, this.user.institute, facultyInput, subjectInput, this.base_server);
+  } catch (err) {
+    console.error("Error initializing autocompletes:", err);
+  }
+
   document.getElementById("cancelUploadBtn").onclick = () => {
+    cleanupLists();
     modal.classList.add("hidden");
     modal.classList.remove("flex");
   };
 
   document.getElementById("submitUploadBtn").onclick = async () => {
-    const faculty = document.getElementById("uploadFacultyInput").value.trim();
-    const subject = document.getElementById("uploadSubjectInput").value.trim();
-    const classId = document.getElementById("uploadClassInput").value.trim();
+    const faculty = facultyInput.value.trim();
+    const subject = subjectInput.value.trim();
+    const classId = classInput.value.trim();
 
-    const studentId = this.user.id; // ✅ New: use stored student ID
-    const studentName = this.user.name ||'default';
+    const studentId = this.user.id;
+    const studentName = this.user.name || "default";
     const college = this.user.institute;
     const openedFiles = this.openedFilePaths || [];
     const currentFolder = this.currentFolderPath || "";
@@ -1784,7 +1990,7 @@ async showUploadSessionModal() {
       formData.append("class", classId);
       formData.append("pdf_name", studentName);
       formData.append("student_name", studentName);
-      formData.append("student_id", studentId); // ✅ Pass student ID to backend
+      formData.append("student_id", studentId);
 
       const response = await fetch(`${this.base_server}/upload-report`, {
         method: "POST",
@@ -1805,6 +2011,7 @@ async showUploadSessionModal() {
       this.showToast("❌ Upload error: " + err.message);
     }
 
+    cleanupLists();
     modal.classList.add("hidden");
     modal.classList.remove("flex");
 
@@ -1816,6 +2023,7 @@ async showUploadSessionModal() {
     }
   };
 }
+
 
 
 

@@ -8,6 +8,8 @@ import tempfile
 from io import BytesIO
 import pandas as pd
 import hashlib
+from urllib.parse import unquote
+
 
 
 
@@ -232,6 +234,8 @@ def get_reports():
     faculty = request.args.get("faculty")
     subject = request.args.get("subject")
     class_id = request.args.get("class")
+    faculty = unquote(faculty)
+    college = unquote(college)
 
     if not all([college, faculty, subject, class_id]):
         return jsonify({"error": "Missing params"}), 400
@@ -462,52 +466,6 @@ def get_my_reports():
 
     return jsonify({"reports": reports})
 
-
-# @app.route("/get-my-reports", methods=["GET"])
-# def get_my_reports():
-#     college = request.args.get("college")
-#     faculty = request.args.get("faculty")
-#     subject = request.args.get("subject")
-#     student_name = request.args.get("student_name")
-
-#     if not all([college, faculty, subject, student_name]):
-#         return jsonify({"error": "Missing params"}), 400
-
-#     subject_ref = (
-#         firestore_client
-#         .collection(college)
-#         .document(faculty)
-#         .collection(subject)
-#     )
-
-#     reports = []
-
-#     # ✅ Loop all class docs
-#     class_docs = subject_ref.stream()
-
-#     for class_doc in class_docs:
-#         class_id = class_doc.id
-
-#         # ✅ For each class doc, loop all pdf_name collections
-#         class_doc_ref = subject_ref.document(class_id)
-#         pdf_collections = class_doc_ref.collections()
-
-#         for pdf_collection in pdf_collections:
-#             pdf_name = pdf_collection.id
-#             file_doc = pdf_collection.document("file").get()
-#             if file_doc.exists:
-#                 data = file_doc.to_dict()
-#                 if data.get("student_name") == student_name:
-#                     reports.append({
-#                         "pdf_name": data.get("pdf_name"),
-#                         "storage_path": data.get("storage_path"),
-#                         "college": college,
-#                         "faculty": faculty,
-#                         "subject": subject,
-#                         "class": class_id
-#                     })
-
-#     return jsonify({"reports": reports})
 
 
 
@@ -844,12 +802,13 @@ def get_faculties(institute_name):
 # -------------------------------
 # 2. Get all subjects for a faculty
 # -------------------------------
-from urllib.parse import unquote
-from urllib.parse import unquote
+
+
 
 @app.route("/get-subjects/<institute_name>/<faculty_email>", methods=["GET"])
 def get_subjects(institute_name, faculty_email):
     faculty_email = unquote(faculty_email)
+    institute_name = unquote(institute_name)
     try:
         subjects = []
 
@@ -867,6 +826,37 @@ def get_subjects(institute_name, faculty_email):
             print("Found subject:", subj.id)
 
         return jsonify({"subjects": subjects}), 200
+
+    except Exception as e:
+        print("Error:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+
+@app.route("/get-classes/<institute_name>/<faculty_email>/<subject>", methods=["GET"])
+def get_classes(institute_name, faculty_email, subject):
+    faculty_email = unquote(faculty_email)
+    subject = unquote(subject)
+    try:
+        classes = []
+
+        # Path: Questions/{institute}/{faculty_email}/{subject}
+        subject_ref = (
+            firestore_client
+            .collection("Questions")
+            .document(institute_name)
+            .collection(faculty_email)
+            .document(subject)
+        )
+
+        # Each class is a subcollection name
+        for class_doc in subject_ref.collections():
+            classes.append(class_doc.id)
+            print("Found class:", class_doc.id)
+
+        return jsonify({"classes": classes}), 200
 
     except Exception as e:
         print("Error:", str(e))
