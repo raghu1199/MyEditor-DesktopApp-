@@ -42,22 +42,15 @@ saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePat
     ipcRenderer.invoke("run-sql-stream", { cmd, args, sqlFile }),
   runCommandT: (command, cwd) => ipcRenderer.invoke("run-commandt", { command, cwd }),
   
-   getHomeDir: () => ipcRenderer.invoke('get-home-dir'),
-  sendInput: (input) => ipcRenderer.send("terminal-input", input),
-  onOutput: (callback) =>
-    ipcRenderer.on("terminal-output", (_event, data) => callback(data)),
-
+   
+  
+  
   resizePty: (cols, rows) => ipcRenderer.send("terminal-resize", { cols, rows }),
   onRunOutput: (callback) => ipcRenderer.on("run-output", callback),
 
-  // writeToTerminal: (data) => ipcRenderer.send("terminal-input", data),
-  // onTerminalOutput: (callback) =>
-  //   ipcRenderer.on("terminal-output", (_event, data) => callback(data)),
-  
-  
-  // dirname: (filePath) => path.dirname(filePath),
+ viteStart: () => ipcRenderer.invoke("vite-start"),
+  viteShutdown: () => ipcRenderer.invoke("vite-shutdown"),
 
-  // return paths to bundled tool binaries (populated by main)
   getBundledToolsPaths: () => ipcRenderer.invoke('get-bundled-tools-paths'),
   getExt: async () => {
     return await ipcRenderer.invoke('getPlatformExt');
@@ -77,13 +70,54 @@ saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePat
     if (!buffer) throw new Error('Failed to read file.');
     return new Blob([buffer], { type: 'application/pdf' });
   },
-onRunOutput: (callback) =>
-    ipcRenderer.on("run-output", (_, data) => callback(data)),
+// onRunOutput: (callback) =>
+//     ipcRenderer.on("run-output", (_, data) => callback(data)),
 
   onRunExit: (callback) =>
     ipcRenderer.on("run-exit", (_, data) => callback(data)),
 
+   
+  // Input & resize
+  // sendInput: (data) => ipcRenderer.send("terminal-input", data),
+  // resize: (cols, rows) => ipcRenderer.send("terminal-resize", { cols, rows }),
+
+  // Prompt
+  
+
+  // Output listener
+  // onOutput: (callback) =>
+  //   ipcRenderer.on("terminal-output", (_event, data) => callback(data)),
+
+  
+
+  login: () => ipcRenderer.invoke("terminal-login"),
+  logout: () => ipcRenderer.invoke("terminal-logout"),
+  sendInput: (data) => ipcRenderer.send("terminal-input", data),
+  resize: (cols, rows) => ipcRenderer.send("terminal-resize", { cols, rows }),
+  printPrompt: () => ipcRenderer.invoke("terminal-print-prompt"),
+  
+
+  // Terminal output listener
+  onOutput: (callback) => {
+    // Remove old listener to prevent double echo
+    ipcRenderer.removeAllListeners("terminal-output");
+
+    // Subscribe new output
+    ipcRenderer.send("terminal-subscribe-output");
+
+    ipcRenderer.on("terminal-output", (_, data) => callback(data));
+  },
+
+  // Optional: remove output listener explicitly
+  removeOutputListener: (callback) => {
+    if (callback) {
+      ipcRenderer.removeListener("terminal-output", callback);
+    }
+  }
+
 });
+
+
 
 
 
