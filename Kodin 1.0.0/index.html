@@ -178,11 +178,17 @@
   z-index: 999;          /* On top of everything else */
 }
 #bottombar span { margin-left: 12px; }
-#mainPane {
+#mainPane,#copilotPane {
+  height: 100%;
+  overflow: hidden;
   padding-bottom: 22px;  /* Same as bottombar height */
 }
 #mainWithCopilot
 {
+
+  display: flex;
+  height: 100%;
+  width: 100%;
   padding-bottom: 22px;  /* Same as bottombar height */
 }
 
@@ -198,22 +204,6 @@
 
   
 
-  <!-- <div id="editorLayout" class="hidden flex-1 flex flex-col">
-    <div id="mainSplit" class="flex flex-1 h-full">
-      
-       <div id="sidebar" class="...">
-        <h3 id="sidebarHeader" class="text-lg font-bold mb-4">Explorer</h3>
-        <div id="fileList"></div>
-      </div>
-
-
-      <div id="mainPane" class="flex flex-col w-full h-full">
-        <div id="tabBar"></div>
-        <div id="editor" class="w-full flex-1"></div>
-        <div id="output" class="p-4 overflow-y-auto h-32"></div>
-      </div>
-    </div>
-  </div> -->
 
 <div id="editorLayout" class="hidden flex flex-1 flex-row overflow-hidden">
   <!-- Sidebar -->
@@ -224,22 +214,19 @@
 
   <!-- Gutter between Sidebar and Editor -->
   <div class="gutter gutter-horizontal"></div>
-
-  <!-- Main Editor + Output + Tabs + Copilot Pane -->
+  
+<!-- Main Editor + Output + Tabs + Copilot Pane -->
 <div id="mainWithCopilot" class="flex flex-1 h-full">
-  <!-- Split left side: main editor area -->
-  <div id="mainPane" class="flex flex-col w-full h-full">
+  <!-- Main Editor Area -->
+  <div id="mainPane" class="flex flex-col h-full">
     <div id="tabBar"></div>
     <div id="editor" class="w-full flex-1"></div>
     <div id="output" class="p-4 overflow-y-auto h-32"></div>
   </div>
 
-  <!-- Gutter between Editor and Copilot -->
-  <div id="copilotGutter" class="gutter gutter-horizontal hidden"></div>
-
   <!-- Copilot Pane -->
   <div id="copilotPane"
-    class="hidden min-w-[200px] max-w-[300px] bg-[#1e1e1e] text-gray-300 border-l border-[#3c3c3c] flex flex-col">
+    class="hidden bg-[#1e1e1e] text-gray-300 border-l border-[#3c3c3c] flex flex-col">
     
     <!-- Header -->
     <div class="flex items-center justify-between px-3 py-2 border-b border-[#3c3c3c] bg-[#2d2d2d]">
@@ -251,7 +238,6 @@
     <!-- Messages Section -->
     <div id="copilotContent" class="flex-1 overflow-y-auto p-2 text-sm space-y-2"></div>
 
-
     <!-- Input Section -->
     <form id="copilotForm" class="p-2 border-t border-[#3c3c3c]">
       <textarea id="copilotInput" placeholder="Ask something..." rows="2"
@@ -261,9 +247,6 @@
     </form>
   </div>
 </div>
-
-
-
 
 
   <!-- Bottom Bar (always spans full width) -->

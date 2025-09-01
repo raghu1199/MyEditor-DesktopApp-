@@ -155,13 +155,52 @@ ipcMain.on('window-control', (event, action) => {
 //   }
 // }
 
+// function getToolsBasePath() {
+//   if (process.env.NODE_ENV === 'development') {
+//     // In dev, tools are inside your project under resources/tools
+//     return path.join(__dirname, 'resources', 'tools');
+//   } else {
+//     // In production, tools should be placed via electron-builder extraResources
+//     // They will be outside app.asar, inside resources/tools
+//     return path.join(process.resourcesPath, 'tools');
+//   }
+// }
+
+// function resolveBundledTools() {
+//   const toolsBase = getToolsBasePath();
+
+//   const lookup = (relativePaths) => {
+//     for (const rel of relativePaths) {
+//       const absPath = path.join(toolsBase, rel);
+//       if (fs.existsSync(absPath)) return absPath;
+//     }
+//     return null;
+//   };
+
+//   return {
+//     python:  lookup(['python/python.exe', 'python/bin/python3', 'python3', 'python']),
+//     gcc:     lookup(['tdm-gcc/bin/gcc.exe', 'mingw64/bin/gcc.exe', 'gcc/bin/gcc', 'bin/gcc']),
+//     gpp:     lookup(['tdm-gcc/bin/g++.exe', 'mingw64/bin/g++.exe', 'gcc/bin/g++', 'bin/g++']),
+//     javac:   lookup(['jdk/bin/javac.exe', 'jdk/bin/javac', 'bin/javac']),
+//     java:    lookup(['jdk/bin/java.exe', 'jdk/bin/java', 'bin/java']),
+//     sqlite3: lookup(['sqlite/sqlite3.exe', 'sqlite/sqlite3', 'bin/sqlite3']),
+//   };
+// }
+
+// function extendPathForTool(cmdPath) {
+//   if (!cmdPath) return process.env.PATH;
+//   const toolDir = path.dirname(cmdPath);
+//   // Also add parent folder for safety (some tools have bin + libexec)
+//   return `${toolDir}${path.delimiter}${path.dirname(toolDir)}${path.delimiter}${process.env.PATH}`;
+// }
+
+
+
+
 function getToolsBasePath() {
   if (process.env.NODE_ENV === 'development') {
-    // In dev, tools are inside your project under resources/tools
     return path.join(__dirname, 'resources', 'tools');
   } else {
-    // In production, tools should be placed via electron-builder extraResources
-    // They will be outside app.asar, inside resources/tools
     return path.join(process.resourcesPath, 'tools');
   }
 }
@@ -177,8 +216,18 @@ function resolveBundledTools() {
     return null;
   };
 
+  const pythonPath = lookup(['python/python.exe', 'python/bin/python3', 'python3', 'python']);
+ 
+  
+  let pipPath = null;
+  if (pythonPath) {
+    const scriptsPath = path.join(path.dirname(pythonPath), 'Scripts', 'pip.exe');
+    pipPath = fs.existsSync(scriptsPath) ? scriptsPath : `"${pythonPath}" -m pip`;
+  }
+
   return {
-    python:  lookup(['python/python.exe', 'python/bin/python3', 'python3', 'python']),
+    python: pythonPath,
+    pip: pipPath,
     gcc:     lookup(['tdm-gcc/bin/gcc.exe', 'mingw64/bin/gcc.exe', 'gcc/bin/gcc', 'bin/gcc']),
     gpp:     lookup(['tdm-gcc/bin/g++.exe', 'mingw64/bin/g++.exe', 'gcc/bin/g++', 'bin/g++']),
     javac:   lookup(['jdk/bin/javac.exe', 'jdk/bin/javac', 'bin/javac']),
@@ -190,9 +239,9 @@ function resolveBundledTools() {
 function extendPathForTool(cmdPath) {
   if (!cmdPath) return process.env.PATH;
   const toolDir = path.dirname(cmdPath);
-  // Also add parent folder for safety (some tools have bin + libexec)
   return `${toolDir}${path.delimiter}${path.dirname(toolDir)}${path.delimiter}${process.env.PATH}`;
 }
+
 
 ipcMain.handle('get-bundled-tools-paths', async () => {
   return resolveBundledTools();
@@ -221,56 +270,6 @@ ipcMain.handle('run-command', async (_, { cmd, args = [] }) => {
     setTimeout(() => { try { proc.kill('SIGTERM'); } catch {} }, 8000);
   });
 });
-
-// ipcMain.handle('run-command-stream', async (_, { cmd, args = [], filePath = null }) => {
-//   return new Promise((resolve) => {
-//     let stdout = '';
-//     let stderr = '';
-
-//     // Ensure cwd is always a string
-//     const cwd = (filePath && typeof filePath === "string") 
-//       ? path.dirname(filePath) 
-//       : process.cwd();
-
-//     const proc = spawn(cmd, args, {
-//       cwd, // ✅ always a string now
-//       windowsHide: true,
-//       shell:true,
-//       env: {
-//         ...process.env,
-//         PATH: extendPathForTool(cmd) // your PATH extension logic
-//       }
-//     });
-
-//     proc.stdout.on('data', (chunk) => {
-//       const txt = chunk.toString();
-//       stdout += txt;
-//       if (mainWindow?.webContents) {
-//         mainWindow.webContents.send('run-output', { type: 'stdout', text: txt });
-//       }
-//     });
-
-//     proc.stderr.on('data', (chunk) => {
-//       const txt = chunk.toString();
-//       stderr += txt;
-//       if (mainWindow?.webContents) {
-//         mainWindow.webContents.send('run-output', { type: 'stderr', text: txt });
-//       }
-//     });
-
-//     proc.on('error', (err) =>
-//       resolve({ code: 1, stdout, stderr: stderr + '\n' + err.message })
-//     );
-//     proc.on('close', (code) =>
-//        resolve({ code, stdout, stderr }));
-
-//     const timer = setTimeout(() => { 
-//       try { proc.kill('SIGTERM'); } catch {} 
-//     }, 12000);
-//     proc.on('close', () => clearTimeout(timer));
-//   });
-// });
-
 
 
 ipcMain.handle('run-command-stream', async (_, { cmd, args = [], filePath = null }) => {
@@ -657,34 +656,272 @@ const homeDir = path.join(os.homedir(), "Desktop");
 //-------------------------------------------
 // Create a new shell
 //-------------------------------------------
+// function createShell() {
+//   if (process.platform === "win32") {
+//     shell = pty.spawn("cmd.exe", [], {
+//       name: "xterm-color",
+//       cwd: homeDir,
+//       env: process.env,
+//     });
+//   } else {
+//     shell = pty.spawn("bash", ["--noprofile", "--norc"], {
+//       name: "xterm-color",
+//       cwd: homeDir,
+//       env: process.env,
+//     });
+//   }
+// }
+
+// function createShell() {
+//   const tools = resolveBundledTools(); // get python/java/etc. paths
+//   const pythonPath = tools.python;
+//   const toolBin = path.dirname(pythonPath);
+
+//   const newEnv = {
+//     ...process.env,
+//     PATH: `${toolBin}${path.delimiter}${process.env.PATH}`,
+//   };
+
+//   if (process.platform === "win32") {
+//     shell = pty.spawn("cmd.exe", [], {
+//       name: "xterm-color",
+//       cwd: homeDir,
+//       env: newEnv,
+//     });
+//   } else {
+//     shell = pty.spawn("bash", ["--noprofile", "--norc"], {
+//       name: "xterm-color",
+//       cwd: homeDir,
+//       env: newEnv,
+//     });
+//   }
+// }
+
+
+
+// function createShell() {
+//   const tools = resolveBundledTools(); // get python/java/etc.
+//   const pythonPath = tools.python;
+//   if (!pythonPath) {
+//     console.error("Bundled Python not found!");
+//     return;
+//   }
+
+//   const pythonDir = path.dirname(pythonPath);
+//   const scriptsDir = path.join(pythonDir, "Scripts"); // pip.exe location
+
+//   const newEnv = {
+//     ...process.env,
+//     // Prepend Scripts and Python dir so python & pip point to bundled ones
+//     PATH: `${scriptsDir}${path.delimiter}${pythonDir}${path.delimiter}${process.env.PATH}`,
+//   };
+
+//   if (process.platform === "win32") {
+//     shell = pty.spawn("cmd.exe", [], {
+//       name: "xterm-color",
+//       cwd: homeDir,
+//       env: newEnv,
+//     });
+//   } else {
+//     shell = pty.spawn("bash", ["--noprofile", "--norc"], {
+//       name: "xterm-color",
+//       cwd: homeDir,
+//       env: newEnv,
+//     });
+//   }
+//   }
+
+//-------------------------------------------
 function createShell() {
+  const tools = resolveBundledTools(); // get python/java/etc.
+  const pythonPath = tools.python;
+  if (!pythonPath || !fs.existsSync(pythonPath)) {
+    console.error("Bundled Python not found!");
+    return;
+  }
+
+  const pythonDir = path.dirname(pythonPath);
+  const scriptsDir = path.join(pythonDir, "Scripts"); // pip.exe location
+
+  const newEnv = {
+    ...process.env,
+    // Prepend Scripts and Python dir so python & pip point to bundled ones
+    PATH: `${scriptsDir}${path.delimiter}${pythonDir}${path.delimiter}${process.env.PATH}`,
+  };
+
   if (process.platform === "win32") {
     shell = pty.spawn("cmd.exe", [], {
       name: "xterm-color",
       cwd: homeDir,
-      env: process.env,
+      env: newEnv,
     });
   } else {
     shell = pty.spawn("bash", ["--noprofile", "--norc"], {
       name: "xterm-color",
       cwd: homeDir,
-      env: process.env,
+      env: newEnv,
     });
   }
+
+  
+  
 }
+
 
 //-------------------------------------------
 // IPC listeners (registered once)
 //-------------------------------------------ssssss
+// ipcMain.on("terminal-input", (event, data) => {
+//   if (!shell) return;
+
+//   const tools = resolveBundledTools();
+//   const pythonPath = tools.python;
+
+//   // Always use python -m pip
+//   const fixedData = data
+//     .replace(/\bpython\b/g, `"${pythonPath}"`)
+//     .replace(/\bpip\b/g, `"${pythonPath}" -m pip`);
+
+  // console.log("fixeddata:", fixedData);
+
+//   shell.write(fixedData);
+// });
+
+// let inputBuffer = "";
+
+// ipcMain.on("terminal-input", (event, data) => {
+//   if (!shell) return;
+
+//   // Echo every character immediately
+//   shell.write(data);
+
+//   // Buffer input for command replacement
+//   inputBuffer += data;
+
+//   // Check if Enter pressed
+//   if (data.includes("\r") || data.includes("\n")) {
+//     let lineToExecute = inputBuffer;
+//     inputBuffer = ""; // reset buffer
+
+//     // Only replace if python or pip is in the command
+//     if (/\bpython\b|\bpip\b/.test(lineToExecute)) {
+//       const tools = resolveBundledTools();
+//       const pythonPath = tools.python;
+//       const pipPath = path.join(path.dirname(pythonPath), "Scripts", "pip.exe");
+
+//       lineToExecute = lineToExecute
+//         .replace(/\bpython\b/g, `"${pythonPath}"`)
+//         .replace(/\bpip\b/g, `"${pipPath}"`);
+      
+//     }
+//     console.log("linetoexecute:",lineToExecute)
+//     // Execute in the same PTY
+//     shell.write(`\r${lineToExecute}\r\n`);
+//   }
+// });
+
+let inputBuffer = "";
+
 ipcMain.on("terminal-input", (event, data) => {
-  if (shell) {
-    try {
-      shell.write(data);
-    } catch (err) {
-      console.error("Error writing to shell:", err);
+  if (!shell) return;
+
+  shell.write(data);
+  inputBuffer += data;
+
+  if (data.includes("\r") || data.includes("\n")) {
+    let lineToExecute = inputBuffer.trim();
+    inputBuffer = "";
+
+    if (/\bpython\b|\bpip\b/.test(lineToExecute)) {
+      const tools = resolveBundledTools();
+
+      if (tools.python) {
+        lineToExecute = lineToExecute.replace(/\bpython\b/g, `"${tools.python}"`);
+      }
+
+      if (tools.pip) {
+        // If pipPath is command string like python -m pip, use directly
+        if (tools.pip.includes('-m pip')) {
+          lineToExecute = lineToExecute.replace(/\bpip\b/g, tools.pip);
+        } else {
+          lineToExecute = lineToExecute.replace(/\bpip\b/g, `"${tools.pip}"`);
+        }
+      }
     }
+
+    console.log("Executing:", lineToExecute);
+    shell.write(`\r${lineToExecute}\r\n`);
   }
 });
+
+
+// // let inputBuffer = "";
+
+// ipcMain.on("terminal-input", (event, data) => {
+//   if (!shell) return;
+
+//   // Buffer input
+//   inputBuffer += data;
+
+//   // Enter pressed
+//   if (data.includes("\r") || data.includes("\n")) {
+//     const tools = resolveBundledTools();
+//     const pythonPath = tools.python;
+//     const scriptsDir = path.join(path.dirname(pythonPath), "Scripts");
+
+//     let lineToExecute = inputBuffer;
+
+//     if (/\bpython\b|\bpip\b/.test(lineToExecute)) {
+//       // Replace with bundled Python
+//       lineToExecute = lineToExecute
+//         .replace(/\bpython\b/g, `"${pythonPath}"`)
+//         .replace(/\bpip\b/g, `"${pythonPath}" pip`);
+//     }
+
+//     // Write corrected line to shell
+//     shell.write(lineToExecute + "\r\n");
+
+//     // Clear buffer
+//     inputBuffer = "";
+//   } else {
+//     // Echo typed characters for interactivity
+//     shell.write(data);
+//   }
+// });
+
+// let inputBuffer = "";
+
+// ipcMain.on("terminal-input", (event, data) => {
+//   if (!shell) return;
+
+//   // Append to buffer
+//   inputBuffer += data;
+
+//   // Echo characters locally in the frontend so user sees them
+//   // (but do NOT send them to PTY yet)
+//   mainWindow.webContents.send('terminal-echo', data);
+
+//   // When Enter is pressed
+//   if (data.includes("\r") || data.includes("\n")) {
+//     let lineToExecute = inputBuffer.trim();
+//     inputBuffer = "";
+
+//     const tools = resolveBundledTools();
+//     const pythonPath = tools.python;
+
+//     // Replace python/pip with bundled paths
+//     lineToExecute = lineToExecute
+//       .replace(/\bpython\b/g, `"${pythonPath}"`)
+//       .replace(/\bpip\b/g, `"${pythonPath}" -m pip`);
+
+//     // Clear previous line in PTY
+//     shell.write('\x0D\x1B[K');
+
+//     // Write the corrected line to PTY
+//     shell.write(lineToExecute + "\r\n");
+//   }
+// });
+
 
 ipcMain.on("terminal-subscribe-output", (event) => {
   if (!shell) return;

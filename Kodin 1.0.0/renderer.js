@@ -107,6 +107,7 @@ class CodeEditorApp {
 
             this.base_server = config.server_api;
             this.base_llm = config.llm_api;
+            console.log("llm and base:",this.base_llm,this.base_server);
 
         } catch (err) {
             console.error("❌ Failed to load config:", err);
@@ -781,6 +782,7 @@ async setupFacultyAutocomplete(inputEl, institute, base_server) {
                 faculties = this.facultyCache.get(institute);
             } else {
                 const res = await fetch(`${base_server}/get-faculties/${institute}`);
+                
                 const data = await res.json();
                 faculties = data.faculties || [];
                 this.facultyCache.set(institute, faculties);
@@ -1944,7 +1946,9 @@ async fetchInstitutesFromBackend() {
   if (!window.allInstitutesCache) {
     try {
       const res = await fetch(`${this.base_server}/institutes`); // Flask endpoint returning all institute names
+     
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
       const data = await res.json();
       // Assuming backend returns: { institutes: ["Institute1", "Institute2", ...] }
       window.allInstitutesCache = data.institutes || [];
@@ -2986,6 +2990,7 @@ async setupOutput() {
   // 🔹 Print initial prompt
   await printPrompt();
 }
+
 
 // 
 
