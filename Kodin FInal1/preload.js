@@ -113,7 +113,12 @@ saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePat
     if (callback) {
       ipcRenderer.removeListener("terminal-output", callback);
     }
-  }
+  },
+  onTerminalEcho: (callback) => ipcRenderer.on('terminal-echo', (event, data) => callback(data)),
+  // readFile: (filePath) => ipcRenderer.invoke("readfile", filePath),
+  deleteFile: (filePath) => ipcRenderer.invoke("delete-file", filePath),
+  renameFile: (filePath, newName) => ipcRenderer.invoke("rename-file", { filePath, newName })
+
 
 });
 

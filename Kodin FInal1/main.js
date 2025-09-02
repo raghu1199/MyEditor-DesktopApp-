@@ -852,72 +852,6 @@ ipcMain.on("terminal-input", (event, data) => {
 });
 
 
-// // let inputBuffer = "";
-
-// ipcMain.on("terminal-input", (event, data) => {
-//   if (!shell) return;
-
-//   // Buffer input
-//   inputBuffer += data;
-
-//   // Enter pressed
-//   if (data.includes("\r") || data.includes("\n")) {
-//     const tools = resolveBundledTools();
-//     const pythonPath = tools.python;
-//     const scriptsDir = path.join(path.dirname(pythonPath), "Scripts");
-
-//     let lineToExecute = inputBuffer;
-
-//     if (/\bpython\b|\bpip\b/.test(lineToExecute)) {
-//       // Replace with bundled Python
-//       lineToExecute = lineToExecute
-//         .replace(/\bpython\b/g, `"${pythonPath}"`)
-//         .replace(/\bpip\b/g, `"${pythonPath}" pip`);
-//     }
-
-//     // Write corrected line to shell
-//     shell.write(lineToExecute + "\r\n");
-
-//     // Clear buffer
-//     inputBuffer = "";
-//   } else {
-//     // Echo typed characters for interactivity
-//     shell.write(data);
-//   }
-// });
-
-// let inputBuffer = "";
-
-// ipcMain.on("terminal-input", (event, data) => {
-//   if (!shell) return;
-
-//   // Append to buffer
-//   inputBuffer += data;
-
-//   // Echo characters locally in the frontend so user sees them
-//   // (but do NOT send them to PTY yet)
-//   mainWindow.webContents.send('terminal-echo', data);
-
-//   // When Enter is pressed
-//   if (data.includes("\r") || data.includes("\n")) {
-//     let lineToExecute = inputBuffer.trim();
-//     inputBuffer = "";
-
-//     const tools = resolveBundledTools();
-//     const pythonPath = tools.python;
-
-//     // Replace python/pip with bundled paths
-//     lineToExecute = lineToExecute
-//       .replace(/\bpython\b/g, `"${pythonPath}"`)
-//       .replace(/\bpip\b/g, `"${pythonPath}" -m pip`);
-
-//     // Clear previous line in PTY
-//     shell.write('\x0D\x1B[K');
-
-//     // Write the corrected line to PTY
-//     shell.write(lineToExecute + "\r\n");
-//   }
-// });
 
 
 ipcMain.on("terminal-subscribe-output", (event) => {
@@ -998,4 +932,27 @@ ipcMain.handle("terminal-print-prompt", () => {
 //-------------------------------------------
 ipcMain.handle("get-home-dir", () => {
   return os.homedir();
+});
+
+
+ipcMain.handle("read-file", async (_, filePath) => {
+  try {
+    const data = fs.readFileSync(filePath, "utf-8");
+    return data;
+  } catch (err) {
+    console.error("Error reading file:", err);
+    throw err;
+  }
+});
+
+ipcMain.handle("delete-file", async (_, filePath) => {
+  fs.rmSync(filePath, { recursive: true, force: true }); // works for files & folders
+  return true;
+});
+
+ipcMain.handle("rename-file", async (_, { filePath, newName }) => {
+  const dir = path.dirname(filePath);
+  const newPath = path.join(dir, newName);
+  fs.renameSync(filePath, newPath);
+  return newPath;
 });

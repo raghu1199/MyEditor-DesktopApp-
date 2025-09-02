@@ -2,8 +2,9 @@
 <html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8" />
-  <title>CodeX</title>
-  <script src="./src/tailwind.js"></script>
+  <title>Kodin</title>
+  <!-- <script type="module" src="./src/tailwind.js"></script> -->
+
 
   <style>
   
@@ -132,7 +133,6 @@
       background: #888;
           }
 
-
     #editor, #output {
       width: 100%;
       min-height: 0;
@@ -177,11 +177,17 @@
   z-index: 999;          /* On top of everything else */
 }
 #bottombar span { margin-left: 12px; }
-#mainPane {
+#mainPane,#copilotPane {
+  height: 100%;
+  overflow: hidden;
   padding-bottom: 22px;  /* Same as bottombar height */
 }
 #mainWithCopilot
 {
+
+  display: flex;
+  height: 100%;
+  width: 100%;
   padding-bottom: 22px;  /* Same as bottombar height */
 }
 
@@ -197,48 +203,30 @@
 
   
 
-  <!-- <div id="editorLayout" class="hidden flex-1 flex flex-col">
-    <div id="mainSplit" class="flex flex-1 h-full">
-      
-       <div id="sidebar" class="...">
-        <h3 id="sidebarHeader" class="text-lg font-bold mb-4">Explorer</h3>
-        <div id="fileList"></div>
-      </div>
-
-
-      <div id="mainPane" class="flex flex-col w-full h-full">
-        <div id="tabBar"></div>
-        <div id="editor" class="w-full flex-1"></div>
-        <div id="output" class="p-4 overflow-y-auto h-32"></div>
-      </div>
-    </div>
-  </div> -->
 
 <div id="editorLayout" class="hidden flex flex-1 flex-row overflow-hidden">
   <!-- Sidebar -->
   <div id="sidebar" class="min-w-[140px] overflow-y-auto">
     <h3 id="sidebarHeader" class="text-lg font-bold mb-4">Explorer</h3>
-    <div id="fileList"></div>
+    <ul id="fileList" class="space-y-2"></ul>
+
   </div>
 
   <!-- Gutter between Sidebar and Editor -->
   <div class="gutter gutter-horizontal"></div>
-
-  <!-- Main Editor + Output + Tabs + Copilot Pane -->
+  
+<!-- Main Editor + Output + Tabs + Copilot Pane -->
 <div id="mainWithCopilot" class="flex flex-1 h-full">
-  <!-- Split left side: main editor area -->
-  <div id="mainPane" class="flex flex-col w-full h-full">
+  <!-- Main Editor Area -->
+  <div id="mainPane" class="flex flex-col h-full">
     <div id="tabBar"></div>
     <div id="editor" class="w-full flex-1"></div>
     <div id="output" class="p-4 overflow-y-auto h-32"></div>
   </div>
 
-  <!-- Gutter between Editor and Copilot -->
-  <div id="copilotGutter" class="gutter gutter-horizontal hidden"></div>
-
   <!-- Copilot Pane -->
   <div id="copilotPane"
-    class="hidden min-w-[200px] max-w-[300px] bg-[#1e1e1e] text-gray-300 border-l border-[#3c3c3c] flex flex-col">
+    class="hidden bg-[#1e1e1e] text-gray-300 border-l border-[#3c3c3c] flex flex-col">
     
     <!-- Header -->
     <div class="flex items-center justify-between px-3 py-2 border-b border-[#3c3c3c] bg-[#2d2d2d]">
@@ -250,7 +238,6 @@
     <!-- Messages Section -->
     <div id="copilotContent" class="flex-1 overflow-y-auto p-2 text-sm space-y-2"></div>
 
-
     <!-- Input Section -->
     <form id="copilotForm" class="p-2 border-t border-[#3c3c3c]">
       <textarea id="copilotInput" placeholder="Ask something..." rows="2"
@@ -261,9 +248,14 @@
   </div>
 </div>
 
+<!-- sidebar context menu -->
 
-
-
+  <div id="sidebarContextMenu" 
+       class="hidden absolute bg-[#2d2d2d] text-gray-200 border border-[#3c3c3c] rounded shadow-lg text-sm z-50">
+    <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" id="openFile">Open</div>
+    <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" id="renameFile">Rename</div>
+    <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" id="deleteFile">Delete</div>
+  </div>
 
   <!-- Bottom Bar (always spans full width) -->
   <div id="bottombar" class="h-6 bg-[#2d2d2d] text-gray-300 flex items-center justify-between px-4 border-t border-[#3c3c3c] text-xs">

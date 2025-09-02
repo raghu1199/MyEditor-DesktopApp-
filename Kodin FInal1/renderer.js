@@ -42,6 +42,7 @@ class CodeEditorApp {
     this.untitledCounter = 1;
     this.sidebarFiles = [];
     this.currentFolderPath=null;
+    this.currentTree="",
     
     this.openedFilePaths=[];
     this.outputs=""; 
@@ -323,6 +324,7 @@ handleFileMenuActions() {
         const folder = await window.electronAPI.openFolder();
         if (folder.canceled) break;  // ← skip only if user canceled
         this.currentFolderPath = folder.folderPath;
+        this.currentTree = folder.tree;
         if (!this.editorInstance) this.showEditor();
         this.loadFolderToSidebar(folder.tree);
         fileMenu.classList.add('hidden');
@@ -421,6 +423,20 @@ async handleExportFile() {
     }
   }
 }
+
+deleteFileFromTree(tree, filePath) {
+  if (!tree || !tree.children) return;
+
+  for (let i = tree.children.length - 1; i >= 0; i--) {
+    const item = tree.children[i];
+    if (item.type === 'file' && item.path === filePath) {
+      tree.children.splice(i, 1); // remove the file
+    } else if (item.type === 'folder') {
+      this.deleteFileFromTree(item, filePath); // recursive
+    }
+  }
+}
+
 
 
 
@@ -2431,7 +2447,11 @@ async logout() {
   //   document.getElementById('app').classList.add('hidden');      // hide welcome/login
   // document.getElementById('editorLayout').classList.remove('hidden'); // show editor
 
+    console.log("inside showeditor");
     await window.electronAPI.login();
+    
+    console.log("inside showeditor");
+
     this.setupSidebar();
     this.setupTabArea();
     this.setupEditor();
@@ -2520,25 +2540,26 @@ async logout() {
 
 };
 
- setupSidebar() {
+
+setupSidebar() {
   const sidebar = document.getElementById('sidebar');
-  const fileListContainer = document.createElement('ul');
-  fileListContainer.id = 'fileList';
-  fileListContainer.className = 'space-y-2';
+  console.log("✅ setupSidebar called");
 
-  sidebar.innerHTML = `<h3 class="text-lg font-bold mb-4">Files</h3>`;
-  sidebar.appendChild(fileListContainer);
+  const fileListContainer = document.getElementById('fileList');
+  fileListContainer.innerHTML = ''; // clear old files
 
-  this.sidebarFiles.forEach((file, index) => {
+  this.sidebarFiles.forEach((file) => {
     const item = document.createElement('li');
-    item.className = 'cursor-pointer hover:bg-gray-700 px-2 py-1 rounded';
+    item.className = 'cursor-pointer hover:bg-gray-700 px-2 py-1 rounded sidebar-item';
     item.innerText = file.name;
     item.dataset.path = file.path;
+    item.dataset.type = file.type || "file";
 
+    // Left click → open file
     item.onclick = async () => {
       if (!this.editorInstance) this.showEditor();
 
-      sidebar.querySelectorAll('li').forEach(li => li.classList.remove('bg-gray-700'));
+      fileListContainer.querySelectorAll('li').forEach(li => li.classList.remove('bg-gray-700'));
       item.classList.add('bg-gray-700');
 
       let content = `// Opened ${file.name}`;
@@ -2550,11 +2571,239 @@ async logout() {
 
       this.openTab(file.name, content, file.path);
     };
-    this.enableInlineRename(item, file);
 
     fileListContainer.appendChild(item);
   });
+
+  this.setupSidebarContextMenu();
 }
+
+
+
+setupSidebarContextMenu() {
+  const contextMenu = document.getElementById("sidebarContextMenu");
+  let currentRightClicked = null;
+
+  const sidebar = document.getElementById("sidebar");
+
+  // Right-click handler
+  sidebar.addEventListener("contextmenu", (e) => {
+    const item = e.target.closest(".sidebar-item");
+    if (!item) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // console.log("👉 Right-clicked:", item.dataset.path);
+
+    currentRightClicked = item;
+
+    // Position menu
+    contextMenu.style.left = `${e.pageX}px`;
+    contextMenu.style.top = `${e.pageY}px`;
+    contextMenu.classList.remove("hidden");
+  });
+
+  // DELETE action
+  document.getElementById("deleteFile").addEventListener("click", async () => {
+    if (!currentRightClicked) return;
+    const filePath = currentRightClicked.dataset.path;
+    // console.log("🗑️ Deleting:", filePath);
+    try {
+      await window.electronAPI.deleteFile(filePath);
+
+      // remove from in-memory list
+      // this.sidebarFiles = this.sidebarFiles.filter(f => f.path !== filePath);
+      const index = this.sidebarFiles.findIndex(f => f.path === filePath);
+      if (index !== -1) {
+        // Remove it directly from the array
+        this.sidebarFiles.splice(index, 1);
+      }
+      console.log("sidebar files:",this.sidebarFiles);
+      this.deleteFileFromTree(this.currentTree, filePath);
+
+      const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
+
+    // Rebuild sidebar from updated tree
+    this.loadFolderToSidebar(refreshed);
+      this.showToast("File deleted");
+
+      // rebuild sidebar UI
+      // this.setupSidebar();
+      
+
+
+    } catch (err) {
+      console.error("❌ Delete failed:", err);
+      this.showToast("File deletion Failed");
+      
+    }
+
+    contextMenu.classList.add("hidden");
+    currentRightClicked = null;
+  });
+
+       document.getElementById("renameFile").addEventListener("click", async () => {
+      if (!currentRightClicked) return;
+
+      const filePath = currentRightClicked.dataset.path;
+      const file = this.sidebarFiles.find(f => f.path === filePath);
+      if (!file) return;
+
+      // Start inline rename immediately
+      await  this.startInlineRename(currentRightClicked, file);
+
+      
+        const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
+        this.currentTree = refreshed;
+        this.loadFolderToSidebar(refreshed);
+
+      // Hide context menu
+      contextMenu.classList.add("hidden");
+      currentRightClicked = null;
+    });
+
+
+
+  // OPEN action
+ 
+
+  // Hide menu when clicking elsewhere
+  document.addEventListener("click", () => {
+    contextMenu.classList.add("hidden");
+    currentRightClicked = null;
+  });
+}
+
+startInlineRename(fileItem, file) {
+  return new Promise((resolve) => {  // <-- wrap in Promise
+    fileItem.innerHTML = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = file.name;
+    input.className = 'bg-gray-800 text-white p-1 rounded w-full';
+
+    const commitRename = async () => {
+      const newName = input.value.trim();
+      if (!newName || newName === file.name) {
+        fileItem.textContent = file.name;
+        resolve();  // <-- resolve even if nothing changed
+        return;
+      }
+
+      const oldPath = file.path;
+      const dirParts = oldPath.split(/[/\\]/);
+      dirParts.pop();
+      const dirPath = dirParts.join('/');
+      const newPath = await window.electronAPI.joinPath(dirPath, newName);
+      const exists = await window.electronAPI.fileExists(newPath);
+      if (exists) {
+        alert('A file or folder with this name already exists.');
+        fileItem.textContent = file.name;
+        resolve();
+        return;
+      }
+
+      const success = await window.electronAPI.renameFileOrFolder(oldPath, newPath);
+      if (!success) {
+        alert('Failed to rename file.');
+        fileItem.textContent = file.name;
+        resolve();
+        return;
+      }
+
+      // Update file object and sidebar item
+      file.name = newName;
+      file.path = newPath;
+      fileItem.textContent = newName;
+
+      // Update open tab if any
+      const tabIndex = this.tabs.findIndex(tab => tab.filePath === oldPath);
+      if (tabIndex !== -1) {
+        const tabBtn = document.querySelectorAll('.tab-item')[tabIndex];
+        if (tabBtn) tabBtn.innerText = newName;
+        this.tabs[tabIndex].name = newName;
+        this.tabs[tabIndex].filePath = newPath;
+      }
+
+      resolve(); // <-- important: resolve after rename
+    };
+
+    input.onblur = commitRename;
+    input.onkeydown = async (e) => {
+      if (e.key === 'Enter') await commitRename();
+      if (e.key === 'Escape') {
+        fileItem.textContent = file.name;
+        resolve();
+      }
+    };
+
+    fileItem.appendChild(input);
+    input.focus();
+  });
+}
+
+
+
+// startInlineRename(fileItem, file) {
+//   // Clear existing content and create input
+//   fileItem.innerHTML = '';
+//   const input = document.createElement('input');
+//   input.type = 'text';
+//   input.value = file.name;
+//   input.className = 'bg-gray-800 text-white p-1 rounded w-full';
+
+//   const commitRename = async () => {
+//     const newName = input.value.trim();
+//     if (!newName || newName === file.name) {
+//       fileItem.textContent = file.name;
+//       return;
+//     }
+
+//     const oldPath = file.path;
+//     const dirParts = oldPath.split(/[/\\]/);
+//     dirParts.pop();
+//     const dirPath = dirParts.join('/');
+//     const newPath = await window.electronAPI.joinPath(dirPath, newName);
+//     const exists = await window.electronAPI.fileExists(newPath);
+//     if (exists) {
+//       alert('A file or folder with this name already exists.');
+//       fileItem.textContent = file.name;
+//       return;
+//     }
+
+//     const success = await window.electronAPI.renameFileOrFolder(oldPath, newPath);
+//     if (!success) {
+//       alert('Failed to rename file.');
+//       fileItem.textContent = file.name;
+//       return;
+//     }
+
+//     file.name = newName;
+//     file.path = newPath;
+//     fileItem.textContent = newName;
+
+//     // Update tab if open
+//     const tabIndex = this.tabs.findIndex(tab => tab.filePath === oldPath);
+//     if (tabIndex !== -1) {
+//       const tabBtn = document.querySelectorAll('.tab-item')[tabIndex];
+//       if (tabBtn) tabBtn.innerText = newName;
+//       this.tabs[tabIndex].name = newName;
+//       this.tabs[tabIndex].filePath = newPath;
+//     }
+//   };
+
+//   input.onblur = commitRename;
+//   input.onkeydown = async (e) => {
+//     if (e.key === 'Enter') await commitRename();
+//     if (e.key === 'Escape') fileItem.textContent = file.name;
+//   };
+
+//   fileItem.appendChild(input);
+//   input.focus();
+// }
+
+
 
 
 setupTabArea() {
@@ -2668,15 +2917,15 @@ closeTab(index) {
 
 
 
-
-loadFolderToSidebar(tree) {
+loadFolderToSidebar(tree) { 
   const sidebar = document.getElementById('sidebar');
   sidebar.innerHTML = `<h3 class="text-lg font-bold mb-4">Explorer</h3>`;
 
   const iconBase = 'text-xs font-mono px-1 border border-gray-500 rounded hover:border-teal-400 cursor-pointer';
-  this.sidebarFiles = [];
+  this.sidebarFiles = []; // clear previous list
+  this.currentTree = tree; // ✅ store the tree for later refresh
 
-  const renderTree = (items, parent, folderPath) => {
+  const renderTree = (items, parent) => {
     queueMicrotask(() => {
       items.forEach(item => {
         const el = document.createElement('li');
@@ -2693,9 +2942,7 @@ loadFolderToSidebar(tree) {
           const childrenContainer = document.createElement('ul');
           childrenContainer.className = 'ml-4 space-y-1 hidden';
 
-          labelSpan.onclick = () => {
-            childrenContainer.classList.toggle('hidden');
-          };
+          labelSpan.onclick = () => childrenContainer.classList.toggle('hidden');
 
           const actions = document.createElement('div');
           actions.className = 'space-x-2 flex text-gray-400 text-xs';
@@ -2727,13 +2974,21 @@ loadFolderToSidebar(tree) {
           el.appendChild(folderHeader);
           el.appendChild(childrenContainer);
 
-          requestIdleCallback(() => {
-            renderTree(item.children, childrenContainer, item.path);
-          });
+          requestIdleCallback(() => renderTree(item.children || [], childrenContainer));
         } else if (item.type === 'file') {
           const fileItem = document.createElement('div');
-          fileItem.className = 'cursor-pointer hover:text-teal-400 ml-1 font-normal text-sm';
+          fileItem.className = 'cursor-pointer hover:text-teal-400 ml-1 font-normal text-sm sidebar-item';
           fileItem.innerText = `📄 ${item.name}`;
+
+          // ✅ Add dataset info for context menu
+          fileItem.dataset.path = item.path;
+          fileItem.dataset.name = item.name;
+          fileItem.dataset.type = 'file';
+
+          // ✅ Immediately add to sidebarFiles (no need to wait for click)
+          if (!this.sidebarFiles.some(f => f.path === item.path)) {
+            this.sidebarFiles.push({ name: item.name, path: item.path, type: 'file' });
+          }
 
           fileItem.onclick = async () => {
             if (!this.editorInstance) this.showEditor();
@@ -2745,9 +3000,6 @@ loadFolderToSidebar(tree) {
               } else {
                 const index = this.tabs.indexOf(existingTab);
                 this.switchTab(index);
-              }
-              if (!this.sidebarFiles.some(f => f.path === item.path)) {
-                this.sidebarFiles.push({ name: item.name, path: item.path, type: 'file' });
               }
             } catch (err) {
               console.error("Error reading file:", item.path, err);
@@ -2775,10 +3027,7 @@ loadFolderToSidebar(tree) {
 
   const rootChildren = document.createElement('ul');
   rootChildren.className = 'ml-2 space-y-1';
-
-  rootLabel.onclick = () => {
-    rootChildren.classList.toggle('hidden');
-  };
+  rootLabel.onclick = () => rootChildren.classList.toggle('hidden');
 
   const rootActions = document.createElement('div');
   rootActions.className = 'space-x-2 flex text-gray-400 text-xs';
@@ -2812,12 +3061,10 @@ loadFolderToSidebar(tree) {
 
   sidebar.appendChild(rootContainer);
 
-  if (tree.children) {
-    renderTree(tree.children, rootChildren, this.currentFolderPath);
-  } else {
-    renderTree(tree, rootChildren, this.currentFolderPath);
-  }
+  renderTree(tree.children || tree, rootChildren);
 }
+
+
 
 
 createInlineInput(folderPath, type, container) {
@@ -3025,47 +3272,214 @@ enableInlineRename(fileItem, file) {
   };
 }
 
+// refreshSidebar() {
+//   const fileListContainer = document.getElementById('fileList');
+//   if (!fileListContainer) return;
+
+//   requestIdleCallback(() => {
+//     fileListContainer.innerHTML = '';
+
+//     this.sidebarFiles.forEach((file, index) => {
+//       const item = document.createElement('div');
+//       item.textContent = file.name;
+//       item.className = 'cursor-pointer hover:bg-gray-700 px-2 py-1 rounded';
+//       item.dataset.index = index;
+//       item.dataset.path = file.path || file.tempPath || '';
+
+//       item.onclick = async () => {
+//         const tabIndex = this.tabs.findIndex(t => {
+//           if (file.path) return t.filePath === file.path;
+//           if (file.tempPath) return t.tempPath === file.tempPath;
+//           return !t.filePath && t.name === file.name;
+//         });
+
+//         if (tabIndex !== -1) {
+//           this.switchTab(tabIndex);
+//         } else if (file.path) {
+//           try {
+//             const content = await window.electronAPI.readFile(file.path);
+//             this.openTab(file.name, content, file.path);
+//           } catch (err) {
+//             console.error("Failed to open file:", file.path, err);
+//           }
+//         }
+
+//         document.querySelectorAll('#fileList div').forEach(el => el.classList.remove('bg-gray-700'));
+//         item.classList.add('bg-gray-700');
+//       };
+
+//       this.enableInlineRename(item, file);
+//       fileListContainer.appendChild(item);
+//     });
+//   });
+// }
+
 refreshSidebar() {
   const fileListContainer = document.getElementById('fileList');
   if (!fileListContainer) return;
 
-  requestIdleCallback(() => {
-    fileListContainer.innerHTML = '';
+  if (!this.currentTree) return; // no tree loaded yet
+  this.loadFolderToSidebar(this.currentTree);
 
-    this.sidebarFiles.forEach((file, index) => {
-      const item = document.createElement('div');
-      item.textContent = file.name;
-      item.className = 'cursor-pointer hover:bg-gray-700 px-2 py-1 rounded';
-      item.dataset.index = index;
-      item.dataset.path = file.path || file.tempPath || '';
+  // Clear container first
+  fileListContainer.innerHTML = '';
 
-      item.onclick = async () => {
-        const tabIndex = this.tabs.findIndex(t => {
-          if (file.path) return t.filePath === file.path;
-          if (file.tempPath) return t.tempPath === file.tempPath;
-          return !t.filePath && t.name === file.name;
-        });
+  // Rebuild sidebar immediately
+  for (let i = 0; i < this.sidebarFiles.length; i++) {
+    const file = this.sidebarFiles[i];
+    const item = document.createElement('div');
+    item.textContent = file.name;
 
-        if (tabIndex !== -1) {
-          this.switchTab(tabIndex);
-        } else if (file.path) {
-          try {
-            const content = await window.electronAPI.readFile(file.path);
-            this.openTab(file.name, content, file.path);
-          } catch (err) {
-            console.error("Failed to open file:", file.path, err);
-          }
+    // Sidebar item styling
+    item.className = 'cursor-pointer hover:bg-gray-700 px-2 py-1 rounded sidebar-item';
+
+    // Dataset attributes for context menu
+    item.dataset.index = i;
+    item.dataset.name = file.name;
+    item.dataset.path = file.path || file.tempPath || '';
+    item.dataset.type = file.type || 'file';
+    item.dataset.isTemp = file.tempPath ? "true" : "false";
+
+    // Click handler to open file/tab
+    item.onclick = async () => {
+      const tabIndex = this.tabs.findIndex(t => {
+        if (file.path) return t.filePath === file.path;
+        if (file.tempPath) return t.tempPath === file.tempPath;
+        return !t.filePath && t.name === file.name;
+      });
+
+      if (tabIndex !== -1) {
+        this.switchTab(tabIndex);
+      } else if (file.path) {
+        try {
+          const content = await window.electronAPI.readFile(file.path);
+          this.openTab(file.name, content, file.path);
+        } catch (err) {
+          console.error("Failed to open file:", file.path, err);
         }
+      }
 
-        document.querySelectorAll('#fileList div').forEach(el => el.classList.remove('bg-gray-700'));
-        item.classList.add('bg-gray-700');
-      };
+      // Highlight the selected file
+      document.querySelectorAll('#fileList div').forEach(el => el.classList.remove('bg-gray-700'));
+      item.classList.add('bg-gray-700');
+    };
 
-      this.enableInlineRename(item, file);
-      fileListContainer.appendChild(item);
-    });
-  });
+    // Enable inline rename if applicable
+    this.enableInlineRename(item, file);
+
+    // Append item to sidebar
+    fileListContainer.appendChild(item);
+  }
 }
+
+
+
+// refreshSidebar() {
+//   const fileListContainer = document.getElementById('fileList');
+//   if (!fileListContainer) return;
+
+//   // Clear container first
+//   fileListContainer.innerHTML = '';
+
+//   requestIdleCallback(() => {
+//     // Rebuild sidebar from current in-memory list
+//     for (let i = 0; i < this.sidebarFiles.length; i++) {
+//       const file = this.sidebarFiles[i];
+//       const item = document.createElement('div');
+//       item.textContent = file.name;
+
+//       // Sidebar item styling
+//       item.className = 'cursor-pointer hover:bg-gray-700 px-2 py-1 rounded sidebar-item';
+
+//       // Dataset attributes for context menu
+//       item.dataset.index = i;
+//       item.dataset.name = file.name;
+//       item.dataset.path = file.path || file.tempPath || '';
+//       item.dataset.type = file.type || 'file';
+//       item.dataset.isTemp = file.tempPath ? "true" : "false";
+
+//       // Click handler to open file/tab
+//       item.onclick = async () => {
+//         const tabIndex = this.tabs.findIndex(t => {
+//           if (file.path) return t.filePath === file.path;
+//           if (file.tempPath) return t.tempPath === file.tempPath;
+//           return !t.filePath && t.name === file.name;
+//         });
+
+//         if (tabIndex !== -1) {
+//           this.switchTab(tabIndex);
+//         } else if (file.path) {
+//           try {
+//             const content = await window.electronAPI.readFile(file.path);
+//             this.openTab(file.name, content, file.path);
+//           } catch (err) {
+//             console.error("Failed to open file:", file.path, err);
+//           }
+//         }
+
+//         // Highlight the selected file
+//         document.querySelectorAll('#fileList div').forEach(el => el.classList.remove('bg-gray-700'));
+//         item.classList.add('bg-gray-700');
+//       };
+
+//       // Enable inline rename if applicable
+//       this.enableInlineRename(item, file);
+
+//       // Append item to sidebar
+//       fileListContainer.appendChild(item);
+//     }
+//   });
+// }
+
+
+// refreshSidebar() {
+//   const fileListContainer = document.getElementById('fileList');
+//   if (!fileListContainer) return;
+
+//   requestIdleCallback(() => {
+//     fileListContainer.innerHTML = '';
+
+//     this.sidebarFiles.forEach((file, index) => {
+//       const item = document.createElement('div');
+//       item.textContent = file.name;
+
+//       // ✅ Added sidebar-item
+//       item.className = 'cursor-pointer hover:bg-gray-700 px-2 py-1 rounded sidebar-item';
+
+//       // ✅ Attach data attributes for context menu usage
+//       item.dataset.index = index;
+//       item.dataset.name = file.name;
+//       item.dataset.path = file.path || file.tempPath || '';
+//       item.dataset.isTemp = file.tempPath ? "true" : "false";
+
+//       item.onclick = async () => {
+//         const tabIndex = this.tabs.findIndex(t => {
+//           if (file.path) return t.filePath === file.path;
+//           if (file.tempPath) return t.tempPath === file.tempPath;
+//           return !t.filePath && t.name === file.name;
+//         });
+
+//         if (tabIndex !== -1) {
+//           this.switchTab(tabIndex);
+//         } else if (file.path) {
+//           try {
+//             const content = await window.electronAPI.readFile(file.path);
+//             this.openTab(file.name, content, file.path);
+//           } catch (err) {
+//             console.error("Failed to open file:", file.path, err);
+//           }
+//         }
+
+//         document.querySelectorAll('#fileList div').forEach(el => el.classList.remove('bg-gray-700'));
+//         item.classList.add('bg-gray-700');
+//       };
+
+//       this.enableInlineRename(item, file);
+//       fileListContainer.appendChild(item);
+//     });
+//   });
+// }
+
 
 async setupOutput() {
   const container = document.getElementById("output");
