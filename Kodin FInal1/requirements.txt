@@ -1,0 +1,12 @@
+# PyTorch with CUDA 12.1 (minimal)
+torch==2.1.2+cu121
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+# Core libraries for fine-tuning
+transformers==4.37.2
+peft==0.10.0
+trl==0.7.10
+bitsandbytes==0.42.0
+
+# Minimal runtime deps
+accelerate==0.27.2

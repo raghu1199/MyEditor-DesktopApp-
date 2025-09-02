@@ -1,3 +1,5 @@
+import './index.css';
+
 import * as monaco from 'monaco-editor';
 import Split from 'split.js';
 import { marked } from 'marked';
@@ -105,6 +107,7 @@ class CodeEditorApp {
 
             this.base_server = config.server_api;
             this.base_llm = config.llm_api;
+            console.log("llm and base:",this.base_llm,this.base_server);
 
         } catch (err) {
             console.error("❌ Failed to load config:", err);
@@ -208,6 +211,14 @@ initTopbar() {
   const fileBtn = document.getElementById('fileBtn');
   const fileMenu = document.getElementById('fileMenu');
   const newFileTypeMenu = document.getElementById('newFileTypeMenu');
+
+    document.addEventListener("keydown", (event) => {
+      // Check if Ctrl + R is pressed
+      if (event.ctrlKey && event.key.toLowerCase() === "r") {
+          event.preventDefault(); // Prevent browser refresh
+          this.runCode(); // Call your runCode function
+      }
+  });
 
 
 
@@ -779,6 +790,7 @@ async setupFacultyAutocomplete(inputEl, institute, base_server) {
                 faculties = this.facultyCache.get(institute);
             } else {
                 const res = await fetch(`${base_server}/get-faculties/${institute}`);
+                
                 const data = await res.json();
                 faculties = data.faculties || [];
                 this.facultyCache.set(institute, faculties);
@@ -1303,6 +1315,8 @@ async downloadReport(path) {
 }
 
 
+
+
 async viewClassSubmissions() {
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
@@ -1365,6 +1379,113 @@ async viewClassSubmissions() {
     };
 }
 
+// showClassReportViewerModal(subject, reports, college, faculty, classId) {
+//     const modal = document.createElement("div");
+//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
+
+//     // Group reports by student_id
+//     const grouped = reports.reduce((acc, r) => {
+//         if (!acc[r.student_id]) acc[r.student_id] = [];
+//         acc[r.student_id].push(r);
+//         return acc;
+//     }, {});
+
+//     const reportCards = Object.entries(grouped).map(([studentId, studentReports]) => {
+//         const studentName = studentReports[0]?.student_name || "Unknown";
+//         const pdfList = studentReports.map(r => `
+//             <div class="flex justify-between items-center mt-2">
+//                 <span class="text-sm text-gray-300">${r.pdf_name || 'session.pdf'}</span>
+//                 <button 
+//                     class="download-btn bg-[#61dafb] text-black px-2 py-1 rounded hover:bg-[#21a1f1]" 
+//                     data-path="${r.storage_path}">
+//                     Download
+//                 </button>
+//             </div>
+//         `).join("");
+
+//         return `
+//             <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
+//                 <p class="text-[#61dafb] font-semibold">${studentName}</p>
+//                 <p class="text-gray-400 text-sm">ID: ${studentId}</p>
+//                 ${pdfList}
+//                 <div class="mt-3">
+//                     <input 
+//                         type="number" 
+//                         min="0" max="100" 
+//                         class="marks-input w-20 p-1 rounded bg-[#444] border border-gray-600 text-white text-center" 
+//                         data-student-id="${studentId}" 
+//                         placeholder="Marks"
+//                         value="${studentReports[0]?.marks || ''}"
+//                     />
+//                 </div>
+//             </div>
+//         `;
+//     }).join("");
+
+//     modal.innerHTML = `
+//         <div class="bg-[#333333] rounded-lg mt-16 w-[650px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
+//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject} - ${classId}</h2>
+
+//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
+
+//             ${reports.length > 0 ? `
+//             <button id="updateMarksBtn" class="mt-4 w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">
+//                 Update Marks
+//             </button>` : ""}
+
+//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
+//         </div>
+//     `;
+//     document.body.appendChild(modal);
+
+//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
+
+//     // Download handlers
+//     modal.querySelectorAll(".download-btn").forEach(btn => {
+//         const path = btn.dataset.path;
+//         btn.onclick = () => this.downloadReport(path);
+//     });
+
+//     // Update marks
+//     const updateBtn = modal.querySelector("#updateMarksBtn");
+//     if (updateBtn) {
+//         updateBtn.onclick = async () => {
+//             const marksData = [];
+            
+//             modal.querySelectorAll(".marks-input").forEach(input => {
+//                 const studentId = input.dataset.studentId;
+//                 const studentReport = reports.find(r => r.student_id === studentId);
+//                 const studentName = studentReport?.student_name || "";
+
+//                 marksData.push({
+//                     student_id: studentId,
+//                     student_name: studentName,
+//                     marks: input.value
+//                 });
+//             });
+
+//             try {
+//                 const res = await fetch(`${this.base_server}/update-marks`, {
+//                     method: "POST",
+//                     headers: { "Content-Type": "application/json" },
+//                     body: JSON.stringify({
+//                         college,
+//                         faculty,
+//                         subject,
+//                         classId,
+//                         marksData
+//                     })
+//                 });
+//                 const data = await res.json();
+//                 this.showToast(data.message || "Marks updated successfully");
+//             } catch (err) {
+//                 console.error(err);
+//                 this.showToast("❌Failed to update marks.");
+//             }
+//         };
+//     }
+// }
+
 showClassReportViewerModal(subject, reports, college, faculty, classId) {
     const modal = document.createElement("div");
     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
@@ -1381,11 +1502,18 @@ showClassReportViewerModal(subject, reports, college, faculty, classId) {
         const pdfList = studentReports.map(r => `
             <div class="flex justify-between items-center mt-2">
                 <span class="text-sm text-gray-300">${r.pdf_name || 'session.pdf'}</span>
-                <button 
-                    class="download-btn bg-[#61dafb] text-black px-2 py-1 rounded hover:bg-[#21a1f1]" 
-                    data-path="${r.storage_path}">
-                    Download
-                </button>
+                <div class="flex gap-2">
+                    <button 
+                        class="view-btn bg-yellow-400 text-black px-2 py-1 rounded hover:bg-yellow-300"
+                        data-path="${r.storage_path}">
+                        View
+                    </button>
+                    <button 
+                        class="download-btn bg-[#61dafb] text-black px-2 py-1 rounded hover:bg-[#21a1f1]" 
+                        data-path="${r.storage_path}">
+                        Download
+                    </button>
+                </div>
             </div>
         `).join("");
 
@@ -1432,6 +1560,34 @@ showClassReportViewerModal(subject, reports, college, faculty, classId) {
         btn.onclick = () => this.downloadReport(path);
     });
 
+    // View handlers
+    // View handlers
+          // View handlers
+modal.querySelectorAll(".view-btn").forEach(btn => {
+    const path = btn.dataset.path;
+    btn.onclick = async () => {
+        try {
+            const res = await fetch(`${this.base_server}/get-view-url`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ storage_path: path })
+            });
+
+            const result = await res.json();
+            if (result.signed_url) {
+              console.log("signed url:",result.signed_url);
+                  this.openPdfViewer(result.signed_url);
+                  // window.open(result.signed_url, "_blank");
+            }
+
+        
+        } catch (err) {
+            console.error(err);
+            this.showToast("❌ Failed to load PDF.");
+        }
+    };
+});
+
     // Update marks
     const updateBtn = modal.querySelector("#updateMarksBtn");
     if (updateBtn) {
@@ -1472,6 +1628,23 @@ showClassReportViewerModal(subject, reports, college, faculty, classId) {
     }
 }
 
+openPdfViewer(url) {
+    const viewerModal = document.createElement("div");
+    viewerModal.className =
+        "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50";
+
+    viewerModal.innerHTML = `
+        <div class="bg-[#1e1e1e] rounded-lg w-[80%] h-[90%] p-4 shadow-lg relative flex flex-col">
+            <button class="absolute top-2 right-3 text-gray-300 hover:text-white text-2xl">&times;</button>
+            <embed src="${url}" type="application/pdf" class="flex-1 w-full h-full rounded" />
+        </div>
+    `;
+
+    document.body.appendChild(viewerModal);
+
+    // Close handler
+    viewerModal.querySelector("button").onclick = () => viewerModal.remove();
+}
 
 
 async generateMarksReport() {
@@ -1942,7 +2115,9 @@ async fetchInstitutesFromBackend() {
   if (!window.allInstitutesCache) {
     try {
       const res = await fetch(`${this.base_server}/institutes`); // Flask endpoint returning all institute names
+     
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
       const data = await res.json();
       // Assuming backend returns: { institutes: ["Institute1", "Institute2", ...] }
       window.allInstitutesCache = data.institutes || [];
@@ -2985,6 +3160,7 @@ async setupOutput() {
   await printPrompt();
 }
 
+
 // 
 
 async runCode() {
@@ -3276,12 +3452,12 @@ toggleCopilotPane() {
     mainPane.parentElement.appendChild(copilotPane);
   }
 
-  if (!copilotGutter) {
-    copilotGutter = document.createElement("div");
-    copilotGutter.id = "copilotGutter";
-    copilotGutter.className = "gutter gutter-horizontal";
-    mainPane.parentElement.insertBefore(copilotGutter, copilotPane);
-  }
+  // if (!copilotGutter) {
+  //   copilotGutter = document.createElement("div");
+  //   copilotGutter.id = "copilotGutter";
+  //   copilotGutter.className = "gutter gutter-horizontal";
+  //   mainPane.parentElement.insertBefore(copilotGutter, copilotPane);
+  // }
 
   const isVisible = !copilotPane.classList.contains("hidden");
 
@@ -3299,14 +3475,14 @@ toggleCopilotPane() {
   } else {
     // Show and re-split
     copilotPane.classList.remove("hidden");
-    copilotGutter.classList.remove("hidden");
+    
     mainPane.style.width = "";
 
     this.copilotSplit = Split(["#mainPane", "#copilotPane"], {
       sizes: [80, 20],
       minSize: [300, 200],
       gutterSize: 4,
-      gutter: () => copilotGutter,
+       gutterSize: 4,
     });
   }
 }
@@ -3381,7 +3557,7 @@ setupSplit() {
   document.querySelectorAll('.gutter').forEach(el => el.remove());
   // Sidebar and Main
   Split(['#sidebar', '#mainWithCopilot'], {
-    sizes: [10, 90],
+    sizes: [15, 85],
     minSize: 100,
     gutterSize: 4,
     elementStyle: (dimension, size, gutterSize) => ({

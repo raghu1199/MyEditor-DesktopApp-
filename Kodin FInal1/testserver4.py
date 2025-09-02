@@ -14,39 +14,33 @@ from urllib.parse import unquote
 
 
 
-
-
-# from transformers import AutoTokenizer, AutoModelForCausalLM
 # import torch
+# from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+# from peft import PeftModel
 
+# Load tokenizer and base model with 8-bit quantization
+# model_name = "bigcode/starcoder2-3b"
+# bnb_config = BitsAndBytesConfig(load_in_8bit=True)
 
-# # ✅ 1️⃣ Paths
-# BASE_MODEL = "bigcode/starcoderbase-3b"   # Only needed for tokenizer
-# CHECKPOINT = "./output/checkpoint-6375"   # Your fine-tuned checkpoint path
-# os.environ["HF_TOKEN"] = "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"  # replace with your token
+# tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+# if tokenizer.pad_token is None:
+#     tokenizer.pad_token = tokenizer.eos_token
 
-# offload_dir="./offload"
-# os.makedirs(offload_dir, exist_ok=True)
-
-# # ✅ 2️⃣ Load tokenizer
-# print("Loading tokenizer...")
-# tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-
-# # ✅ 3️⃣ Load fine-tuned model
-# print("Loading fine-tuned model...")
 # model = AutoModelForCausalLM.from_pretrained(
-#     CHECKPOINT,
-#     device_map={"": "cpu"},
-#     torch_dtype=torch.float16,
-#     offload_folder=offload_dir,
-#     token=os.environ["HF_TOKEN"] 
+#     model_name,
+#     quantization_config=bnb_config,
+#     device_map="auto",
+#     trust_remote_code=True
 # )
 
+# Load fine-tuned LoRA adapter
+# lora_path = "./checkpoints/checkpoint-12800"  # Change to your LoRA path
+# model = PeftModel.from_pretrained(model, lora_path)
 # model.eval()
 
 
-
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "C:/Users/Raghvendra/Desktop/MyEditorServer/editor.json"
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/var/www/myflaskapp/editor.json"
 
 app = Flask(__name__)
 CORS(app)
@@ -345,6 +339,7 @@ def generate_marks_excel():
         )
 
         class_ids = sorted([cls.id for cls in subject_ref.collections()])
+        
         print("Class IDs found:", class_ids)
 
         # Step 2: Prepare student data
@@ -577,6 +572,24 @@ def get_signed_url():
     return jsonify({"signed_url": signed_url})
 
 
+@app.route("/get-view-url", methods=["POST"])
+def get_view_url():
+    data = request.json
+    storage_path = data.get("storage_path")
+
+    if not storage_path:
+        return jsonify({"error": "Missing storage_path"}), 400
+
+    blob = bucket.blob(storage_path)
+    signed_url = blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(minutes=15),
+        method="GET",
+        response_disposition="inline",          # 👈 key for viewing
+        response_type="application/pdf"         # 👈 force PDF type
+    )
+
+    return jsonify({"signed_url": signed_url})
 
 # Initialize Firestore (do this once at app startup)
 # cred = credentials.Certificate("serviceAccountKey.json")
@@ -918,45 +931,35 @@ def get_class_marks():
         return jsonify({"error": str(e)}), 500
 
 
-# # ✅ 4️⃣ Flask route
-# @app.route('/copilot', methods=['POST'])
+
+
+# @app.route("/copilot", methods=["POST"])
 # def copilot():
 #     data = request.get_json()
-#     instruction = data.get("prompt", "").strip()
-    
-#     if not instruction:
-#         return jsonify({"error": "Missing prompt"}), 400
+#     prompt = data.get("prompt", "")
 
-#     # Build prompt in tested format
-#     prompt = (
-#         "### System:\n"
-#         "You are a tutor. Give responses as a tutor. "
-#         "Do not give full code solutions — only partial solutions, hints, or small examples.\n\n"
-#         f"### Instruction: {instruction}"
-#     )
+#     if not prompt:
+#         return jsonify({"error": "Prompt is required"}), 400
 
-#     try:
-#         # Tokenize
-#         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+#     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+#     with torch.no_grad():
+#         outputs = model.generate(
+#             **inputs,
+#             max_new_tokens=256,
+#             do_sample=False,
+#             eos_token_id=tokenizer.eos_token_id,
+#             early_stopping=True,
+#             pad_token_id=tokenizer.eos_token_id
+#         )
+#     response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+#     return jsonify({"response": response_text})
 
-#         # Generate
-#         with torch.no_grad():
-#             outputs = model.generate(
-#                 **inputs,
-#                 max_new_tokens=100,
-#                 do_sample=True,
-#                 top_p=0.9,
-#                 temperature=0.7
-#             )
+# # Start the server and expose via ngrok
+# public_url = ngrok.connect(5000)
+# print(" * ngrok tunnel available at:", public_url)
 
-#         # Decode
-#         response_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-#         trimmed_response = response_text[len(prompt):].strip()
+# app.run(port=5000)
 
-#         return jsonify({"response": trimmed_response})
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
 
 
 # ✅ 5️⃣ Run server

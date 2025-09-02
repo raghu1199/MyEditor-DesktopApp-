@@ -1,0 +1,14 @@
+# Restart Gunicorn (Flask app service)
+sudo systemctl restart myflaskapp
+
+# Check Gunicorn status
+sudo systemctl status myflaskapp
+
+# Restart Nginx
+sudo systemctl restart nginx
+
+# Check Nginx status
+sudo systemctl status nginx
+
+# Optional: Reload Nginx without full restart (if config changed)
+sudo systemctl reload nginx

@@ -1,0 +1,8 @@
+rmdir /s /q "C:\Users\Raghvendra\AppData\Local\electron-builder"   # or PowerShell equivalent
+npm install                                                        # make sure dependencies are fresh
+npm rebuild                                                        # rebuild native modules
+npm run rebuild                                                    # your script (electron-rebuild -f -w @lydell/node-pty)
+npm run dist 
+
+Remove-Item -Recurse -Force "C:\Users\Raghvendra\AppData\Local\electron-builder"
+                                                      # finally build exe
