@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog,protocol } = require('electron');
 const path = require('path');
 const fsp = require('fs/promises');
 const fs = require('fs');
@@ -11,6 +11,12 @@ const pty = require("@lydell/node-pty");
 
 let mainWindow;
 const isDev = process.env.NODE_ENV === 'development';
+const tempFiles = [];
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: "app", privileges: { secure: true, standard: true } }
+]);
+
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -21,7 +27,8 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      webSecurity: false, // 🔹 allow iframe to load app:// URLs
     }
   });
 
@@ -31,14 +38,47 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }
+
+    registerPdfProtocol(mainWindow.webContents.session);
 }
+
+
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { secure: true, standard: true } }
+]);
 
 app.whenReady().then(() => {
   createWindow();
+  
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+
+function registerPdfProtocol(ses) {
+  ses.protocol.registerBufferProtocol("app", (request, callback) => {
+    const urlPath = request.url.replace("app://pdfs/", "");
+
+    let basePath;
+    if (process.env.NODE_ENV === "development") {
+      basePath = path.join(__dirname, "resources", "pdfs");
+    } else {
+      basePath = path.join(process.resourcesPath, "pdfs");
+    }
+
+    const filePath = path.join(basePath, urlPath);
+
+    try {
+      const data = fs.readFileSync(filePath);
+      callback({ mimeType: "application/pdf", data });
+    } catch (err) {
+      console.error("PDF read error:", err);
+      callback({ statusCode: 404 });
+    }
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
@@ -144,6 +184,9 @@ ipcMain.on('window-control', (event, action) => {
   }
 });
 
+ipcMain.handle("resolve-tutorial-pdf", (event, fileName) => {
+  return `app://pdfs/${fileName}`;
+});
 
 
 
@@ -155,44 +198,6 @@ ipcMain.on('window-control', (event, action) => {
 //   }
 // }
 
-// function getToolsBasePath() {
-//   if (process.env.NODE_ENV === 'development') {
-//     // In dev, tools are inside your project under resources/tools
-//     return path.join(__dirname, 'resources', 'tools');
-//   } else {
-//     // In production, tools should be placed via electron-builder extraResources
-//     // They will be outside app.asar, inside resources/tools
-//     return path.join(process.resourcesPath, 'tools');
-//   }
-// }
-
-// function resolveBundledTools() {
-//   const toolsBase = getToolsBasePath();
-
-//   const lookup = (relativePaths) => {
-//     for (const rel of relativePaths) {
-//       const absPath = path.join(toolsBase, rel);
-//       if (fs.existsSync(absPath)) return absPath;
-//     }
-//     return null;
-//   };
-
-//   return {
-//     python:  lookup(['python/python.exe', 'python/bin/python3', 'python3', 'python']),
-//     gcc:     lookup(['tdm-gcc/bin/gcc.exe', 'mingw64/bin/gcc.exe', 'gcc/bin/gcc', 'bin/gcc']),
-//     gpp:     lookup(['tdm-gcc/bin/g++.exe', 'mingw64/bin/g++.exe', 'gcc/bin/g++', 'bin/g++']),
-//     javac:   lookup(['jdk/bin/javac.exe', 'jdk/bin/javac', 'bin/javac']),
-//     java:    lookup(['jdk/bin/java.exe', 'jdk/bin/java', 'bin/java']),
-//     sqlite3: lookup(['sqlite/sqlite3.exe', 'sqlite/sqlite3', 'bin/sqlite3']),
-//   };
-// }
-
-// function extendPathForTool(cmdPath) {
-//   if (!cmdPath) return process.env.PATH;
-//   const toolDir = path.dirname(cmdPath);
-//   // Also add parent folder for safety (some tools have bin + libexec)
-//   return `${toolDir}${path.delimiter}${path.dirname(toolDir)}${path.delimiter}${process.env.PATH}`;
-// }
 
 
 
@@ -475,18 +480,52 @@ ipcMain.handle('getDirName', async (_, fullPath) => {
   }
 });
 
+// ipcMain.handle('write-output-temp', async (_, outputText) => {
+//   try {
+//     const tempDir = os.tmpdir();
+//     const fileName = `kodin_output_${Date.now()}.txt`;
+//     const fullPath = path.join(tempDir, fileName);
+//     await fsp.writeFile(fullPath, outputText, 'utf-8'); // ✅ using fsp
+//     tempFiles.push(fullPath); 
+//     return fullPath;
+//   } catch (err) {
+//     console.error('Error writing output temp file:', err);
+//     return null;
+//   }
+// });
+
 ipcMain.handle('write-output-temp', async (_, outputText) => {
   try {
     const tempDir = os.tmpdir();
-    const fileName = `kodin_output_${Date.now()}.txt`;
+
+    // ✅ Use fixed name instead of timestamp
+    const fileName = "kodin_output.txt";
     const fullPath = path.join(tempDir, fileName);
-    await fsp.writeFile(fullPath, outputText, 'utf-8'); // ✅ using fsp
+
+    // ✅ Delete old file if it exists
+    try {
+      await fsp.unlink(fullPath);
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.warn('Failed to delete old output file:', err);
+      }
+    }
+
+    // ✅ Write fresh output
+    await fsp.writeFile(fullPath, outputText, 'utf-8');
+
+    // ✅ Track file for cleanup on quit (avoid duplicates)
+    if (!tempFiles.includes(fullPath)) {
+      tempFiles.push(fullPath);
+    }
+
     return fullPath;
   } catch (err) {
     console.error('Error writing output temp file:', err);
     return null;
   }
 });
+
 
 
 ipcMain.handle('save-question-files', async (_, { questionText }) => {
@@ -540,6 +579,7 @@ ipcMain.handle('create-folder-in-folder', async (_, { folderPath, folderName }) 
     return { success: false, error: error.message };
   }
 });
+
 
 
 ipcMain.handle('read-file-as-blob', async (_, filePath) => {
@@ -671,56 +711,66 @@ ipcMain.handle('get-platform', async () => {
 });
 
 
-ipcMain.handle('path:getTempExePath', (_event, { fileName, ext }) => {
+// ipcMain.handle('path:getTempExePath', (_event, { fileName, ext }) => {
+//   const tempDir = os.tmpdir();
+
+//   // Remove directories from fileName and forbidden chars
+//   const baseName = path.basename(fileName, path.extname(fileName))
+//                      .replace(/[<>:"/\\|?*]/g, ''); // sanitize
+
+//   const timestamp = Date.now(); // avoid collisions
+//   return path.join(tempDir, `${baseName}-${timestamp}${ext}`);
+// });
+
+ipcMain.handle('path:getTempExePath', async (_event, { fileName, ext }) => {
   const tempDir = os.tmpdir();
 
-  // Remove directories from fileName and forbidden chars
   const baseName = path.basename(fileName, path.extname(fileName))
-                     .replace(/[<>:"/\\|?*]/g, ''); // sanitize
+                   .replace(/[<>:"/\\|?*]/g, '');
 
-  const timestamp = Date.now(); // avoid collisions
-  return path.join(tempDir, `${baseName}-${timestamp}${ext}`);
+  const exePath = path.join(tempDir, `${baseName}${ext}`);
+
+  try {
+    await fsp.unlink(exePath); // remove old file if it exists
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.warn('Failed to delete old exe:', err);
+    }
+  }
+
+  return exePath;
 });
 
 
-
-
-
+// // openShell
 // ipcMain.handle("openShell", async (event) => {
-//   // If already in program mode, kill all program processes
+//   // kill program PTYs if any
 //   if (currentMode === "program") {
 //     for (const [pid, item] of interactiveProcesses.entries()) {
-//       try { item.process.kill(); } catch {}
+//       try { item.process.kill(); } catch (e) {}
 //       interactiveProcesses.delete(pid);
 //     }
 //   }
 
-//   // Kill old shell
 //   if (shell) {
-//     try { shell.kill(); } catch {}
+//     try { shell.kill(); } catch (e) {}
 //     shell = null;
 //   }
 
 //   const platform = process.platform;
-//   let cmd, args;
-
-//   if (platform === "win32") {
-//     cmd = "cmd.exe";
-//     args = [];
-//   } else {
-//     cmd = "bash";
-//     args = ["-i"];
-//   }
+//   const cmd = platform === "win32" ? "cmd.exe" : "bash";
+//   const args = platform === "win32" ? [] : ["-i"];
 
 //   shell = pty.spawn(cmd, args, {
 //     name: "xterm-color",
 //     cwd: process.cwd(),
 //     env: { ...process.env, TERM: "xterm-256color" },
-//     cols: 120,
-//     rows: 40,
+//     cols: 120, rows: 40,
 //   });
 
 //   currentMode = "shell";
+//   // notify renderer that mode changed
+//   event.sender.send('mode-changed', currentMode);
 
 //   shell.on("data", (data) => {
 //     event.sender.send("shell-output", normalizeOutput(data));
@@ -730,45 +780,28 @@ ipcMain.handle('path:getTempExePath', (_event, { fileName, ext }) => {
 // });
 
 
+function getDefaultShell() {
+  const platform = process.platform;
 
-// ipcMain.handle("openShell", async (event) => {
-//   if (shell) {
-//     try { shell.kill(); } catch {}
-//     shell = null;
-//   }
+  if (platform === "win32") {
+    // 1. Use COMSPEC if defined
+    if (process.env.comspec) return process.env.comspec;
 
-//   const platform = process.platform;
-//   let cmd, args;
+    // 2. Otherwise, use Windows dir
+    const winDir = process.env.windir || "C:\\Windows";
+    return path.join(winDir, "System32", "cmd.exe");
+  }
 
-//   if (platform === "win32") {
-//     cmd = "cmd.exe"; 
-//     args = [];
-//   } else {
-//     cmd = "bash";   // You could also use "zsh" if available
-//     args = ["-i"];
-//   }
+  // macOS/Linux: prefer user shell
+  if (process.env.SHELL) return process.env.SHELL;
 
-//   shell = pty.spawn(cmd, args, {
-//     name: "xterm-color",
-//     cwd: process.cwd(),
-//     env: { ...process.env, TERM: "xterm-256color" },
-//     cols: 120,
-//     rows: 40,
-//   });
+  // Fallbacks
+  if (platform === "darwin") return "/bin/zsh"; // macOS default
+  return "/bin/sh"; // Linux safe default
+}
 
-//   shell.on("data", (data) => {
-//     event.sender.send("shell-output", normalizeOutput(data));
-//   });
-
-//   return { success: true };
-// });
-
-
-// main process (ipcMain)
-
-// openShell
 ipcMain.handle("openShell", async (event) => {
-  // kill program PTYs if any
+  // Kill program PTYs if any
   if (currentMode === "program") {
     for (const [pid, item] of interactiveProcesses.entries()) {
       try { item.process.kill(); } catch (e) {}
@@ -776,25 +809,36 @@ ipcMain.handle("openShell", async (event) => {
     }
   }
 
+  // Kill old shell if any
   if (shell) {
     try { shell.kill(); } catch (e) {}
     shell = null;
   }
 
-  const platform = process.platform;
-  const cmd = platform === "win32" ? "cmd.exe" : "bash";
-  const args = platform === "win32" ? [] : ["-i"];
+  // Resolve shell + args
+  const cmd = getDefaultShell();
+  const args = process.platform === "win32" ? [] : ["-i"];
 
-  shell = pty.spawn(cmd, args, {
-    name: "xterm-color",
-    cwd: process.cwd(),
-    env: { ...process.env, TERM: "xterm-256color" },
-    cols: 120, rows: 40,
-  });
+  try {
+    shell = pty.spawn(cmd, args, {
+      name: "xterm-color",
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PATH: process.env.PATH,    // ✅ ensure PATH exists in packaged app
+        TERM: "xterm-256color",
+      },
+      cols: 120,
+      rows: 40,
+    });
+  } catch (err) {
+    console.error("Failed to spawn shell:", cmd, err);
+    event.sender.send("shell-output", `\r\n❌ Failed to start shell: ${err.message}\r\n`);
+    return { success: false, error: err.message };
+  }
 
   currentMode = "shell";
-  // notify renderer that mode changed
-  event.sender.send('mode-changed', currentMode);
+  event.sender.send("mode-changed", currentMode);
 
   shell.on("data", (data) => {
     event.sender.send("shell-output", normalizeOutput(data));
@@ -802,6 +846,72 @@ ipcMain.handle("openShell", async (event) => {
 
   return { success: true };
 });
+
+
+
+
+// // helper to pick a safe default shell
+// function getDefaultShell() {
+//   const platform = process.platform;
+
+//   if (platform === "win32") {
+//     // Use COMSPEC if defined, fallback to cmd.exe
+//     return process.env.comspec || "C:\\Windows\\System32\\cmd.exe";
+//   }
+
+//   // macOS/Linux: prefer user shell
+//   if (process.env.SHELL) return process.env.SHELL;
+
+//   // Fallbacks
+//   if (platform === "darwin") return "/bin/zsh"; // macOS default
+//   return "/bin/sh"; // Linux safe default
+// }
+
+// ipcMain.handle("openShell", async (event) => {
+//   // kill program PTYs if any
+//   if (currentMode === "program") {
+//     for (const [pid, item] of interactiveProcesses.entries()) {
+//       try { item.process.kill(); } catch (e) {}
+//       interactiveProcesses.delete(pid);
+//     }
+//   }
+
+//   // kill old shell if any
+//   if (shell) {
+//     try { shell.kill(); } catch (e) {}
+//     shell = null;
+//   }
+
+//   // resolve shell + args
+//   const cmd = getDefaultShell();
+//   const args = process.platform === "win32" ? [] : ["-i"];
+
+//   try {
+//     shell = pty.spawn(cmd, args, {
+//       name: "xterm-color",
+//       cwd: process.cwd(),
+//       env: {
+//         ...process.env,             // ✅ keep PATH and other env vars
+//         TERM: "xterm-256color",
+//       },
+//       cols: 120,
+//       rows: 40,
+//     });
+//   } catch (err) {
+//     console.error("Failed to spawn shell:", err);
+//     return { success: false, error: err.message };
+//   }
+
+//   currentMode = "shell";
+//   event.sender.send("mode-changed", currentMode);
+
+//   shell.on("data", (data) => {
+//     event.sender.send("shell-output", normalizeOutput(data));
+//   });
+
+//   return { success: true };
+// });
+
 
 // startInteractiveProcess (auto-kill shell and notify renderer)
 ipcMain.handle('startInteractiveProcess', async (event, cmd, args = [], filePath = null) => {

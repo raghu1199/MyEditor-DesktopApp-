@@ -25,12 +25,6 @@ marked.setOptions({
   langPrefix: 'hljs language-',
 });
 
-
-
-
-
-
-
 class CodeEditorApp {
 
   constructor() {
@@ -174,6 +168,9 @@ initTopbar() {
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer hidden" data-action="myClasses">  My Classes </div>
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="logout">Logout</div>
           </div>
+
+          
+
         </div>
 
 
@@ -185,9 +182,23 @@ initTopbar() {
         <button id="generateExcelBtn" class="hover:text-teal-400 hidden">📊 Generate Report</button>
 
         <button id="runBtn" class="hover:text-teal-400">▶Run</button>
-        <button id="open-shell-btn">Open Shell</button>
+        <button id="open-shell-btn">Terminal</button>
 
         <button id="copilotToggleFromMenu" class="hover:text-teal-400">🤖Kodin</button>
+        <!-- Tutorial Menu -->
+        <div class="relative">
+          <button id="tutorialBtn" class="hover:text-teal-400">Tutorial</button>
+          <div id="tutorialMenu" class="hidden absolute left-0 mt-1 w-48 bg-[#2d2d2d] border border-[#3c3c3c] rounded shadow-lg z-50">
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-file="python.pdf">Python</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-file="c.pdf">C</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-file="cpp.pdf">C++</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-file="java.pdf">Java</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-file="javascript.pdf">JavaScript</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-file="sql.pdf">SQL</div>
+          </div>
+        </div>
+        
+
       </div>
 
       <!-- USER INFO + WINDOW BUTTONS -->
@@ -208,6 +219,7 @@ initTopbar() {
   document.getElementById('close-btn').onclick = () => window.electronAPI.windowControl('close');
   // document.getElementById('logoutBtn').onclick = () => location.reload();
   document.getElementById('runBtn').onclick = () => this.runCode();
+  // <button id="pdfToggleFromMenu" class="hover:text-teal-400">📄 Tutorial</button>
 
       
 
@@ -218,6 +230,16 @@ initTopbar() {
   document.getElementById('open-shell-btn').addEventListener('click', () => {
   this.setupShellTerminal();
 });
+
+this.handleTutorialMenuActions();
+
+  const closeBtn = document.getElementById("copilotToggleBtn");
+      if (closeBtn) {
+        // bind ensures "this" refers to CopilotUI instance
+        closeBtn.addEventListener("click", this.hideCopilotPane.bind(this));
+      }
+    
+
 
 
     document.addEventListener("keydown", (event) => {
@@ -289,6 +311,120 @@ initTopbar() {
       });
 
 }
+
+handleTutorialMenuActions() {
+  const tutorialBtn = document.getElementById("tutorialBtn");
+  const tutorialMenu = document.getElementById("tutorialMenu");
+
+  // Toggle submenu
+  tutorialBtn.onclick = (e) => {
+    e.stopPropagation();
+    tutorialMenu.classList.toggle("hidden");
+  };
+
+  // Close menu when clicking outside
+  document.body.addEventListener("click", () => {
+    tutorialMenu.classList.add("hidden");
+  });
+
+  // Handle submenu clicks
+
+
+  tutorialMenu.addEventListener("click", async (e) => {
+     e.stopPropagation();
+  const fileName = e.target.dataset.file;
+  if (!fileName) return;
+
+  const pdfUrl = await window.electronAPI.resolveTutorialPdf(fileName);
+
+  this.showPdfInPane(pdfUrl);  // ✅ iframe can load file:// now
+  tutorialMenu.classList.add("hidden");
+});
+
+}
+
+showPdfInPane(pdfUrl) {
+  const pdfPane = document.getElementById("pdfPane");
+  const copilotPane = document.getElementById("copilotPane");
+  const mainPane = document.getElementById("mainPane");
+
+  if (!pdfPane || !mainPane) return;
+
+  // Inject header + iframe
+  pdfPane.innerHTML = `
+    <div class="pdf-header flex items-center justify-between px-3 py-2 border-b border-[#3c3c3c] bg-[#2d2d2d]">
+      <span class="text-sm font-semibold text-teal-400">PDF Viewer</span>
+      <button id="pdfCloseBtn" class="text-gray-400 hover:text-teal-300 text-xs">❌</button>
+    </div>
+    <iframe src="${pdfUrl}" class="w-full h-full border-0"></iframe>
+  `;
+
+  // Hide Copilot if it’s open
+  if (copilotPane && !copilotPane.classList.contains("hidden")) {
+    if (this.copilotSplit) {
+      this.copilotSplit.destroy();
+      this.copilotSplit = null;
+    }
+    copilotPane.classList.add("hidden");
+  }
+
+  // Show PDF pane
+  pdfPane.classList.remove("hidden");
+  mainPane.style.flex = ""; // Let Split.js handle
+
+  // Destroy old split if exists
+  if (window.pdfSplit) {
+    window.pdfSplit.destroy();
+    window.pdfSplit = null;
+  }
+
+  // Create Split.js (resizable panes)
+  window.pdfSplit = Split(["#mainPane", "#pdfPane"], {
+    sizes: [85, 15],
+    minSize: [100, 100],
+    gutterSize: 4,
+    cursor: "col-resize",
+  });
+
+  // Close button handler
+  document.getElementById("pdfCloseBtn")?.addEventListener("click", () => {
+    pdfPane.classList.add("hidden");
+
+    if (window.pdfSplit) {
+      window.pdfSplit.destroy();
+      window.pdfSplit = null;
+    }
+
+    // Reset editor width
+    mainPane.style.flex = "1 1 100%";
+  });
+}
+
+
+// showPdfInPane(pdfUrl) {
+//   const pdfPane = document.getElementById("pdfPane");
+//   if (!pdfPane) return;
+
+//   // Keep header intact
+//   const header = pdfPane.querySelector(".pdf-header");
+//   pdfPane.innerHTML = `
+//     <div class="pdf-header flex items-center justify-between px-3 py-2 border-b border-[#3c3c3c] bg-[#2d2d2d]">
+//       <span class="text-sm font-semibold text-teal-400">PDF Viewer</span>
+//       <button id="pdfCloseBtn" class="text-gray-400 hover:text-teal-300 text-xs">❌</button>
+//     </div>
+//     <iframe src="${pdfUrl}" class="w-full h-full border-0"></iframe>
+//   `;
+
+//   // Restore header if it existed
+//   if (header) pdfPane.querySelector(".pdf-header").replaceWith(header);
+
+//   pdfPane.classList.remove("hidden");
+
+//   document.getElementById("pdfCloseBtn")?.addEventListener("click", () => {
+//     pdfPane.classList.add("hidden");
+//   });
+// }
+
 
 
 handleFileMenuActions() {
@@ -3035,6 +3171,7 @@ createInlineInput(folderPath, type, container) {
   const cleanup = () => {
     li.remove();
   };
+  
 
   input.onkeydown = async (e) => {
     const name = input.value.trim();
@@ -3477,7 +3614,7 @@ async runCode() {
                 const cleanout = this.cleanOutput(result.output || "");
                 this.outputs+=cleanout;
                 append('✅ Captured final output:');
-                append(this.outputs);
+                append(result.output || "");
               });
               this._setInteractiveMode(false);
               return false;
@@ -3500,7 +3637,7 @@ async runCode() {
           append(compileResult.stderr);
           return;
         }
-        append('✅ Compilation successful. Running interactively...');
+        append('✅ Compilation successful');
         const { pid } = await window.electronAPI.startInteractiveProcess(outExec, [], currentTab.filePath);
 
         this._setInteractiveMode(true, (data) => window.electronAPI.sendInteractiveInput(pid, data));
@@ -3684,6 +3821,7 @@ async runCode() {
   }
 }
 
+
 async setupShellTerminal() {
   // Just open backend shell
   await window.electronAPI.openShell();
@@ -3749,7 +3887,7 @@ setEditorLanguage(filename) {
       value: '',
       language: 'python',
       theme: 'vs-dark',
-      fontSize: 16, 
+      fontSize: 18, 
       automaticLayout: true,
        minimap: { enabled: false }
          
@@ -3795,10 +3933,26 @@ showCopilotPane() {
   if (pane) pane.classList.remove('hidden');
 }
 
+// hideCopilotPane() {
+//   const pane = document.getElementById('copilotPane');
+//   if (pane) pane.classList.add('hidden');
+// }
+
 hideCopilotPane() {
-  const pane = document.getElementById('copilotPane');
-  if (pane) pane.classList.add('hidden');
-}
+    const copilotPane = document.getElementById("copilotPane");
+    const mainPane = document.getElementById("mainPane");
+
+    if (!copilotPane || !mainPane) return;
+
+    copilotPane.classList.add("hidden");
+
+    if (this.copilotSplit) {
+      this.copilotSplit.destroy();
+      this.copilotSplit = null;
+    }
+
+    mainPane.style.flex = "1 1 100%";
+  }
 
 
 toggleCopilotPane() {
@@ -3916,6 +4070,103 @@ async fetchCopilotResponse(prompt) {
 }
 
 
+// // ===== PDF Viewer =====
+// togglePdfPane() {
+//   const pdfPane = document.getElementById("pdfPane");
+//   const copilotPane = document.getElementById("copilotPane");
+//   const mainPane = document.getElementById("mainPane");
+
+//   if (!pdfPane || !mainPane) return;
+
+//   const isVisible = !pdfPane.classList.contains("hidden");
+
+//   if (isVisible) {
+//     // Hide PDF
+//     pdfPane.classList.add("hidden");
+
+//     if (window.pdfSplit) {
+//       window.pdfSplit.destroy();
+//       window.pdfSplit = null;
+//     }
+
+//     // Reset editor to full width
+//     mainPane.style.flex = "1 1 100%";
+//   } else {
+//     // Hide Copilot if open
+//     if (copilotPane && !copilotPane.classList.contains("hidden")) {
+//       if (this.copilotSplit) {
+//         this.copilotSplit.destroy();
+//       this.copilotSplit = null;
+//       }
+//       copilotPane.classList.add("hidden");
+//     }
+
+//     // Show PDF
+//     pdfPane.classList.remove("hidden");
+//     mainPane.style.flex = ""; // Let Split.js control
+
+//     if (window.pdfSplit) window.pdfSplit.destroy();
+//     window.pdfSplit = Split(["#mainPane", "#pdfPane"], {
+//       sizes: [85, 15],
+//       minSize: [100, 100],
+//       gutterSize: 4,
+//       cursor: "col-resize",
+//     });
+//   }
+// }
+
+
+// hidePdfPane() {
+//   const pdfPane = document.getElementById("pdfPane");
+//   if (!pdfPane || pdfPane.classList.contains("hidden")) return;
+//   this.togglePdfPane();
+// }
+
+// /**
+//  * Load a PDF into the iframe.
+//  * @param {string} filePath - Absolute path or file:// URL
+//  */
+// loadPdfInViewer(filePath) {
+//   const frame = document.getElementById("pdfFrame");
+//   if (!frame) return;
+
+//   // Normalize to file:// for Electron if a plain path is passed
+//   let src = filePath;
+//   if (filePath && !/^https?:\/\//i.test(filePath) && !/^file:\/\//i.test(filePath)) {
+//     // Basic path -> file URL (Windows-safe)
+//     const normalized = filePath
+//       .replace(/\\/g, "/")
+//       .replace(/^[A-Za-z]:/, (m) => `/${m}`); // C: -> /C:
+//     src = `file://${normalized}`;
+//   }
+
+//   frame.src = src || "";
+// }
+
+// /** Open a file picker via main process, then load selected PDF */
+// async openPdfPickerAndLoad() {
+//   try {
+//     // You likely already have electronAPI for dialogs
+//     const result = await window.electronAPI?.pickFile?.({
+//       title: "Open PDF",
+//       filters: [{ name: "PDF", extensions: ["pdf"] }],
+//       properties: ["openFile"]
+//     });
+
+//     if (result && !result.canceled && result.filePaths?.[0]) {
+//       this.loadPdfInViewer(result.filePaths[0]);
+//       // Ensure pane is visible
+//       const pdfPane = document.getElementById("pdfPane");
+//       if (pdfPane?.classList.contains("hidden")) this.togglePdfPane();
+//     }
+//   } catch (e) {
+//     console.error("PDF open error:", e);
+//     this.showToast?.("Failed to open PDF.");
+//   }
+// }
+
+
+
 setupSplit() {
 
   document.querySelectorAll('.gutter').forEach(el => el.remove());
@@ -3957,41 +4208,6 @@ setupSplit() {
   // Editor and Copilot (initially only when Copilot is visible)
   this.copilotSplit = null;
 }
-
-
-
-// setupSplit() {
-//   // Sidebar and Main
-//   Split(['#sidebar', '#mainWithCopilot'], {
-//     sizes: [10, 80],
-//     minSize: 150,
-//     gutterSize: 4,
-//     elementStyle: (dimension, size, gutterSize) => ({
-//       'flex-basis': `calc(${size}% - ${gutterSize}px)`,
-//     }),
-//     gutterStyle: (dimension, gutterSize) => ({
-//       'flex-basis': `${gutterSize}px`,
-//     }),
-//   });
-
-//   // Editor and Output inside Main
-//   Split(['#editor', '#output'], {
-//     direction: 'vertical',
-//     sizes: [80, 20],
-//     minSize: [100, 100], // prevent collapsing too small
-//     gutterSize: 4,
-
-//     onDragEnd: () => {
-//     if (this.fitAddon) {
-//       this.fitAddon.fit();
-//     }
-//   }
-//   });
-
-//   // Editor and Copilot (initially only when Copilot is visible)
-//   this.copilotSplit = null;
-// }
-
 
 
 }
