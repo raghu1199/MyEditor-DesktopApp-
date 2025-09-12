@@ -50,6 +50,9 @@ class CodeEditorApp {
     institute: ''
   };
   this.copilot=null;
+  this.fetchedfaculty='';
+  this.fetchedsubject='';
+  this.fetchedclassid='';
 
     this.loadFolderToSidebar = this.loadFolderToSidebar.bind(this);
 
@@ -98,11 +101,11 @@ class CodeEditorApp {
             }
 
             const config = snapshot.data();
-            console.log("✅ Loaded remote config:", config);
+            // console.log("✅ Loaded remote config:", config);
 
             this.base_server = config.server_api;
             this.base_llm = config.llm_api;
-            console.log("llm and base:",this.base_llm,this.base_server);
+            // console.log("llm and base:",this.base_llm,this.base_server);
 
         } catch (err) {
             console.error("❌ Failed to load config:", err);
@@ -129,12 +132,12 @@ class CodeEditorApp {
         await initFirebase();
     } else {
         this.showToast("⚠️ No internet detected. You are in Guest Mode.");
-        console.log("Guest mode activated due to no internet.");
+        // console.log("Guest mode activated due to no internet.");
     }
 
     // Listen for internet reconnection
     window.addEventListener("online", async () => {
-        console.log("🌐 Internet reconnected, initializing Firebase...");
+        // console.log("🌐 Internet reconnected, initializing Firebase...");
         this.showToast("🌐 Internet detected! Loading remote config...");
         await initFirebase();
     });
@@ -162,11 +165,17 @@ initTopbar() {
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="saveFile">Save</div>
 
             <!-- Moved buttons inside File menu -->
-            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer hidden" data-action="exportFile">📤 Export</div>
-            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer hidden" data-action="viewMySubmissions">📥 My Submissions</div>
-            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer hidden" data-action="viewJoinRequests">📥 View Join Requests</div>
-            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer hidden" data-action="myClasses">  My Classes </div>
+
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="joinClass">🎓 Join Class</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="viewClassSubmissions">📚 View Class Submissions</div>
+
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="exportFile">📤 Export</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="viewMySubmissions">📥 My Submissions</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="viewJoinRequests">📥 View Join Requests</div>
+            <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="myClasses">My Classes</div>
+            
             <div class="px-4 py-2 hover:bg-[#3c3c3c] cursor-pointer" data-action="logout">Logout</div>
+
           </div>
 
           
@@ -174,15 +183,15 @@ initTopbar() {
         </div>
 
 
-        <button id="joinClassBt" class="hover:text-teal-400 hidden">🎓 Join Class</button>
+        
         <button id="getQuestionBtn" class="hover:text-teal-400 hidden">📥 Get Question</button>
         <button id="postQuestionBtn" class="hover:text-teal-400 hidden">📝 Post Question</button>
         <button id="uploadBtn" class="hover:text-teal-400 hidden">📤 Upload Session</button>
-        <button id="viewClassSubmissionsBtn" class="hover:text-teal-400 hidden">📚 View Class Submissions</button>
+       
         <button id="generateExcelBtn" class="hover:text-teal-400 hidden">📊 Generate Report</button>
 
         <button id="runBtn" class="hover:text-teal-400">▶Run</button>
-        <button id="open-shell-btn">Terminal</button>
+        <button id="open-shell-btn" class="hover:text-teal-400 ">Terminal</button>
 
         <button id="copilotToggleFromMenu" class="hover:text-teal-400">🤖Kodin</button>
         <!-- Tutorial Menu -->
@@ -356,7 +365,7 @@ showPdfInPane(pdfUrl) {
       <span class="text-sm font-semibold text-teal-400">PDF Viewer</span>
       <button id="pdfCloseBtn" class="text-gray-400 hover:text-teal-300 text-xs">❌</button>
     </div>
-    <iframe src="${pdfUrl}" class="w-full h-full border-0"></iframe>
+<iframe src="${pdfUrl}" class="w-full h-full border-0"></iframe>
   `;
 
   // Hide Copilot if it’s open
@@ -380,7 +389,7 @@ showPdfInPane(pdfUrl) {
 
   // Create Split.js (resizable panes)
   window.pdfSplit = Split(["#mainPane", "#pdfPane"], {
-    sizes: [85, 15],
+    sizes: [60, 40],
     minSize: [100, 100],
     gutterSize: 4,
     cursor: "col-resize",
@@ -400,30 +409,6 @@ showPdfInPane(pdfUrl) {
   });
 }
 
-
-// showPdfInPane(pdfUrl) {
-//   const pdfPane = document.getElementById("pdfPane");
-//   if (!pdfPane) return;
-
-//   // Keep header intact
-//   const header = pdfPane.querySelector(".pdf-header");
-//   pdfPane.innerHTML = `
-//     <div class="pdf-header flex items-center justify-between px-3 py-2 border-b border-[#3c3c3c] bg-[#2d2d2d]">
-//       <span class="text-sm font-semibold text-teal-400">PDF Viewer</span>
-//       <button id="pdfCloseBtn" class="text-gray-400 hover:text-teal-300 text-xs">❌</button>
-//     </div>
-//     <iframe src="${pdfUrl}" class="w-full h-full border-0"></iframe>
-//   `;
-
-//   // Restore header if it existed
-//   if (header) pdfPane.querySelector(".pdf-header").replaceWith(header);
-
-//   pdfPane.classList.remove("hidden");
-
-//   document.getElementById("pdfCloseBtn")?.addEventListener("click", () => {
-//     pdfPane.classList.add("hidden");
-//   });
-// }
 
 
 
@@ -473,11 +458,26 @@ handleFileMenuActions() {
         fileMenu.classList.add('hidden');
         break;
       }
+      case 'resetPassword':{
+        this.showResetPasswordModal();  // Custom function to open modal
+        fileMenu.classList.add('hidden');
+        break;
+        }
 
       case 'saveFile':
         this.saveCurrentFile();
         fileMenu.classList.add('hidden');
         break;
+
+       case 'joinClass':
+        this.showQuestionModal(); // keep your existing join class function
+        fileMenu.classList.add('hidden');
+        break;
+
+  case 'viewClassSubmissions':
+        this.showClassSubmissions(); // keep your existing view class submissions function
+        fileMenu.classList.add('hidden');
+        break;  
 
       default:
         break;
@@ -530,6 +530,7 @@ async handleExportFile() {
 
   if (!this.outputs || this.outputs.trim() === "") {
     this.showToast("⚠️ No output captured yet. Please run (Ctrl+Enter) before exporting.");
+    
     
   }
 
@@ -590,61 +591,254 @@ deleteFileFromTree(tree, filePath) {
 
 
 
+// initFileMenuUserActions() {
+//   if (!this.user) return; // safety check
+
+//   const fileMenu = document.getElementById('fileMenu');
+
+
+
+
+//   // Hide all role-specific items first
+//   fileMenu.querySelectorAll(
+//     '[data-action="exportFile"],[data-action="viewClassSubmissions"],[data-action="joinClass"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"], [data-action="myClasses"]'
+//   ).forEach(el => {
+//     el.classList.add('hidden');
+//   });
+
+//   // 🎓 Join Class
+//     const joinClassBtn = fileMenu.querySelector('[data-action="joinClass"]');
+//     if (joinClassBtn) {
+//         if (this.user.role === 'student') {
+//             joinClassBtn.classList.remove('hidden');
+//             joinClassBtn.onclick = () => this.joinClass();
+//         } else {
+//             joinClassBtn.classList.add('hidden');
+//         }
+//     }
+
+//     // 📚 View Class Submissions
+//     const viewClassSubmissionsBtn = fileMenu.querySelector('[data-action="viewClassSubmissions"]');
+//     if (viewClassSubmissionsBtn) {
+//         if (this.user.role === 'teacher') {
+//             viewClassSubmissionsBtn.classList.remove('hidden');
+//             viewClassSubmissionsBtn.onclick = () => this.viewClassSubmissions();
+//         } else {
+//             viewClassSubmissionsBtn.classList.add('hidden');
+//         }
+//     }
+
+//   // Role-based visibility
+//   if (this.user.role === 'teacher') {
+//     fileMenu.querySelector('[data-action="viewJoinRequests"]').classList.remove('hidden');
+//     fileMenu.querySelector('[data-action="myClasses"]').classList.remove('hidden'); // ✅ show My Classes
+//   } else if (this.user.role === 'student') {
+//     fileMenu.querySelector('[data-action="viewMySubmissions"]').classList.remove('hidden');
+//   }
+
+//   // Export and logout for all users
+//   fileMenu.querySelector('[data-action="exportFile"]').classList.remove('hidden');
+//   fileMenu.querySelector('[data-action="logout"]').classList.remove('hidden');
+
+//   // Attach click handlers (replacing to remove old listeners)
+//   fileMenu.querySelectorAll(
+//     '[data-action="exportFile"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"], [data-action="myClasses"]'
+//   ).forEach(item => {
+//     item.replaceWith(item.cloneNode(true));
+//   });
+
+//   fileMenu.querySelectorAll(
+//     '[data-action="exportFile"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"], [data-action="myClasses"]'
+//   ).forEach(item => {
+//     item.addEventListener('click', (e) => {
+//       const action = e.currentTarget.dataset.action;
+//       switch(action) {
+//         case 'viewJoinRequests':
+//           this.askSubjectAndViewRequests();
+//           break;
+//         case 'viewMySubmissions':
+//           this.viewMySubmissions();
+//           break;
+//         case 'exportFile':
+//           this.handleExportFile();
+//           break;
+//         case 'logout':
+//           this.logout();
+//           break;
+//         case 'myClasses': // ✅ Trigger My Classes modal
+//           this.showMyClassesModal();
+//           break;
+//       }
+//     });
+//   });
+// }
+
+// initFileMenuUserActions() {
+//     if (!this.user) return; // safety check
+
+//     const fileMenu = document.getElementById('fileMenu');
+//     if (!fileMenu) return;
+
+//     // List of all role-specific buttons
+//     const roleButtons = [
+//         'exportFile', 'viewClassSubmissions', 'joinClass', 
+//         'viewJoinRequests', 'viewMySubmissions', 'logout', 'myClasses'
+//     ];
+
+//     // Hide all first safely
+//     roleButtons.forEach(action => {
+//         const el = fileMenu.querySelector(`[data-action="${action}"]`);
+//         if (el) el.classList.add('hidden');
+//     });
+
+//     // 🎓 Join Class (students only)
+//     const joinClassBtn = fileMenu.querySelector('[data-action="joinClass"]');
+//     if (joinClassBtn && this.user.role === 'student') {
+//         joinClassBtn.classList.remove('hidden');
+//         joinClassBtn.onclick = () => this.joinClass();
+//     }
+
+//     // 📚 View Class Submissions (teachers only)
+//     const viewClassSubmissionsBtn = fileMenu.querySelector('[data-action="viewClassSubmissions"]');
+//     if (viewClassSubmissionsBtn && this.user.role === 'teacher') {
+//         viewClassSubmissionsBtn.classList.remove('hidden');
+//         viewClassSubmissionsBtn.onclick = () => this.viewClassSubmissions();
+//     }
+
+//     // Teacher-specific buttons
+//     if (this.user.role === 'teacher') {
+//         const viewJoinRequestsBtn = fileMenu.querySelector('[data-action="viewJoinRequests"]');
+//         const myClassesBtn = fileMenu.querySelector('[data-action="myClasses"]');
+//         if (viewJoinRequestsBtn) {
+//             viewJoinRequestsBtn.classList.remove('hidden');
+//             viewJoinRequestsBtn.onclick = () => this.askSubjectAndViewRequests();
+//         }
+//         if (myClassesBtn) {
+//             myClassesBtn.classList.remove('hidden');
+//             myClassesBtn.onclick = () => this.showMyClassesModal();
+//         }
+//     }
+
+//     // Student-specific buttons
+//     if (this.user.role === 'student') {
+//         const viewMySubmissionsBtn = fileMenu.querySelector('[data-action="viewMySubmissions"]');
+//         if (viewMySubmissionsBtn) {
+//             viewMySubmissionsBtn.classList.remove('hidden');
+//             viewMySubmissionsBtn.onclick = () => this.viewMySubmissions();
+//         }
+//     }
+
+//     // Export and Logout for all users
+//     const exportBtn = fileMenu.querySelector('[data-action="exportFile"]');
+//     if (exportBtn) {
+//         exportBtn.classList.remove('hidden');
+//         exportBtn.onclick = () => this.handleExportFile();
+//     }
+
+//     const logoutBtn = fileMenu.querySelector('[data-action="logout"]');
+//     if (logoutBtn) {
+//         logoutBtn.classList.remove('hidden');
+//         logoutBtn.onclick = () => this.logout();
+//     }
+// }
+
 initFileMenuUserActions() {
-  if (!this.user) return; // safety check
+    if (!this.user) return; // safety check
 
-  const fileMenu = document.getElementById('fileMenu');
+    const fileMenu = document.getElementById('fileMenu');
+    if (!fileMenu) return;
 
-  // Hide all role-specific items first
-  fileMenu.querySelectorAll(
-    '[data-action="exportFile"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"], [data-action="myClasses"]'
-  ).forEach(el => {
-    el.classList.add('hidden');
-  });
+    // List of all role-specific buttons
+    const roleButtons = [
+        'exportFile', 'viewClassSubmissions', 'joinClass', 
+        'viewJoinRequests', 'viewMySubmissions', 'logout', 'myClasses'
+    ];
 
-  // Role-based visibility
-  if (this.user.role === 'teacher') {
-    fileMenu.querySelector('[data-action="viewJoinRequests"]').classList.remove('hidden');
-    fileMenu.querySelector('[data-action="myClasses"]').classList.remove('hidden'); // ✅ show My Classes
-  } else if (this.user.role === 'student') {
-    fileMenu.querySelector('[data-action="viewMySubmissions"]').classList.remove('hidden');
-  }
-
-  // Export and logout for all users
-  fileMenu.querySelector('[data-action="exportFile"]').classList.remove('hidden');
-  fileMenu.querySelector('[data-action="logout"]').classList.remove('hidden');
-
-  // Attach click handlers (replacing to remove old listeners)
-  fileMenu.querySelectorAll(
-    '[data-action="exportFile"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"], [data-action="myClasses"]'
-  ).forEach(item => {
-    item.replaceWith(item.cloneNode(true));
-  });
-
-  fileMenu.querySelectorAll(
-    '[data-action="exportFile"], [data-action="viewJoinRequests"], [data-action="viewMySubmissions"], [data-action="logout"], [data-action="myClasses"]'
-  ).forEach(item => {
-    item.addEventListener('click', (e) => {
-      const action = e.currentTarget.dataset.action;
-      switch(action) {
-        case 'viewJoinRequests':
-          this.askSubjectAndViewRequests();
-          break;
-        case 'viewMySubmissions':
-          this.viewMySubmissions();
-          break;
-        case 'exportFile':
-          this.handleExportFile();
-          break;
-        case 'logout':
-          this.logout();
-          break;
-        case 'myClasses': // ✅ Trigger My Classes modal
-          this.showMyClassesModal();
-          break;
-      }
+    // Hide all first safely
+    roleButtons.forEach(action => {
+        const el = fileMenu.querySelector(`[data-action="${action}"]`);
+        if (el) el.classList.add('hidden');
     });
-  });
+
+    // 🎓 Join Class (students only)
+    const joinClassBtn = fileMenu.querySelector('[data-action="joinClass"]');
+    if (joinClassBtn && this.user.role === 'student') {
+        joinClassBtn.classList.remove('hidden');
+        joinClassBtn.onclick = (e) => {
+            e.stopPropagation();  // prevent bubbling
+            this.joinClass();
+            fileMenu.classList.add('hidden'); // close menu
+        };
+    }
+
+    // 📚 View Class Submissions (teachers only)
+    const viewClassSubmissionsBtn = fileMenu.querySelector('[data-action="viewClassSubmissions"]');
+    if (viewClassSubmissionsBtn && this.user.role === 'teacher') {
+        viewClassSubmissionsBtn.classList.remove('hidden');
+        viewClassSubmissionsBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.viewClassSubmissions();
+            fileMenu.classList.add('hidden');
+        };
+    }
+
+    // Teacher-specific buttons
+    if (this.user.role === 'teacher') {
+        const viewJoinRequestsBtn = fileMenu.querySelector('[data-action="viewJoinRequests"]');
+        const myClassesBtn = fileMenu.querySelector('[data-action="myClasses"]');
+
+        if (viewJoinRequestsBtn) {
+            viewJoinRequestsBtn.classList.remove('hidden');
+            viewJoinRequestsBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.askSubjectAndViewRequests();
+                fileMenu.classList.add('hidden');
+            };
+        }
+
+        if (myClassesBtn) {
+            myClassesBtn.classList.remove('hidden');
+            myClassesBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.showMyClassesModal();
+                fileMenu.classList.add('hidden');
+            };
+        }
+    }
+
+    // Student-specific buttons
+    if (this.user.role === 'student') {
+        const viewMySubmissionsBtn = fileMenu.querySelector('[data-action="viewMySubmissions"]');
+        if (viewMySubmissionsBtn) {
+            viewMySubmissionsBtn.classList.remove('hidden');
+            viewMySubmissionsBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.viewMySubmissions();
+                fileMenu.classList.add('hidden');
+            };
+        }
+    }
+
+    // Export and Logout for all users
+    const exportBtn = fileMenu.querySelector('[data-action="exportFile"]');
+    if (exportBtn) {
+        exportBtn.classList.remove('hidden');
+        exportBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.handleExportFile();
+            fileMenu.classList.add('hidden');
+        };
+    }
+
+    const logoutBtn = fileMenu.querySelector('[data-action="logout"]');
+    if (logoutBtn) {
+        logoutBtn.classList.remove('hidden');
+        logoutBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.logout();
+            fileMenu.classList.add('hidden');
+        };
+    }
 }
 
 
@@ -690,6 +884,7 @@ async showMyClassesModal() {
       this.showToast("Please enter a subject first.");
       return;
     }
+    this.showToast("⏳ Fetching classes...");
 
     try {
       const res = await fetch(`${this.base_server}/get-classes/${encodeURIComponent(institute)}/${encodeURIComponent(faculty)}/${encodeURIComponent(subject)}`);
@@ -840,8 +1035,11 @@ async showQuestionModal() {
     modal.classList.remove("flex");
     facultyInput.removeEventListener("input", onFacultyChangeClear);
     subjectInput.removeEventListener("input", onSubjectChangeClear);
+    this.showToast("⏳ Fetching Question...");
+    
 
     this.fetchQuestion(faculty, subject, classId);
+
   };
 }
 
@@ -854,6 +1052,9 @@ async fetchQuestion(faculty, subject, classId) {
     this.showToast("Faculty, subject, class ID, or institute is missing.");
     return;
   }
+  this.fetchedfaculty=faculty;
+  this.fetchedsubject=subject;
+  this.fetchedclassid=classId;
 
   try {
     const response = await fetch(
@@ -933,7 +1134,7 @@ showToast(message, duration = 2500) {
     toast.style.opacity = '0';
     setTimeout(() => {
       toast.remove();
-    }, 300); // Match fade-out transition duration
+    }, 400); // Match fade-out transition duration
   }, duration);
 }
 
@@ -1129,6 +1330,7 @@ async joinClass() {
         const student_id = this.user.id;
         const student_name = this.user.name || "";
         const college = this.user.institute;
+        this.showToast("⏳ Sending Request...");
 
         if (!faculty || !subject) {
             this.showToast("Please fill all fields.");
@@ -1189,6 +1391,7 @@ async askSubjectAndViewRequests() {
         const subject = document.getElementById("requestSubject").value.trim();
         const faculty = this.user.id; // or id depending on your API
         const college = this.user.institute;
+        this.showToast("⏳ Fetching Requests...");
 
         if (!subject) {
             this.showToast("Please enter a subject.");
@@ -1238,6 +1441,7 @@ async askSubjectAndViewRequests() {
         const subject = document.getElementById("requestSubject").value.trim();
         const faculty = this.user.id;
         const college = this.user.institute;
+        
 
         try {
             const res = await fetch(`${this.base_server}/approve-requests`, {
@@ -1349,6 +1553,8 @@ async viewMySubmissions() {
         const subject = subjectInput.value.trim();
         const student_id = this.user.id; // ✅ using student_id
 
+        this.showToast("⏳ Loading submissions...");
+
         if (!college || !faculty || !subject || !student_id) {
             this.showToast("Please fill all fields.");
             return;
@@ -1438,6 +1644,7 @@ showReportViewerModal(subject, reports, college, faculty, student_id) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload)
                 });
+                this.showToast("⏳ Merging Reports...");
                 const result = await res.json();
                 if (result.signed_url) {
                     window.open(result.signed_url, "_blank");
@@ -1530,6 +1737,7 @@ async viewClassSubmissions() {
             this.showToast("Please fill all fields.");
             return;
         }
+        this.showToast("⏳ Loading Submissions...");
 
         try {
             const res = await fetch(`${this.base_server}/get-reports?college=${college}&faculty=${faculty}&subject=${subject}&class=${classId}`);
@@ -1545,112 +1753,6 @@ async viewClassSubmissions() {
     };
 }
 
-// showClassReportViewerModal(subject, reports, college, faculty, classId) {
-//     const modal = document.createElement("div");
-//     modal.className = "fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50";
-
-//     // Group reports by student_id
-//     const grouped = reports.reduce((acc, r) => {
-//         if (!acc[r.student_id]) acc[r.student_id] = [];
-//         acc[r.student_id].push(r);
-//         return acc;
-//     }, {});
-
-//     const reportCards = Object.entries(grouped).map(([studentId, studentReports]) => {
-//         const studentName = studentReports[0]?.student_name || "Unknown";
-//         const pdfList = studentReports.map(r => `
-//             <div class="flex justify-between items-center mt-2">
-//                 <span class="text-sm text-gray-300">${r.pdf_name || 'session.pdf'}</span>
-//                 <button 
-//                     class="download-btn bg-[#61dafb] text-black px-2 py-1 rounded hover:bg-[#21a1f1]" 
-//                     data-path="${r.storage_path}">
-//                     Download
-//                 </button>
-//             </div>
-//         `).join("");
-
-//         return `
-//             <div class="bg-[#2a2a2a] rounded p-4 mb-4 border border-gray-700">
-//                 <p class="text-[#61dafb] font-semibold">${studentName}</p>
-//                 <p class="text-gray-400 text-sm">ID: ${studentId}</p>
-//                 ${pdfList}
-//                 <div class="mt-3">
-//                     <input 
-//                         type="number" 
-//                         min="0" max="100" 
-//                         class="marks-input w-20 p-1 rounded bg-[#444] border border-gray-600 text-white text-center" 
-//                         data-student-id="${studentId}" 
-//                         placeholder="Marks"
-//                         value="${studentReports[0]?.marks || ''}"
-//                     />
-//                 </div>
-//             </div>
-//         `;
-//     }).join("");
-
-//     modal.innerHTML = `
-//         <div class="bg-[#333333] rounded-lg mt-16 w-[650px] max-h-[90vh] overflow-y-auto p-6 text-white shadow-xl border border-gray-700 relative">
-//             <h2 class="text-xl font-bold text-[#61dafb] mb-4 text-center">Class Submissions for ${subject} - ${classId}</h2>
-
-//             ${reports.length === 0 ? `<p>No reports found.</p>` : reportCards}
-
-//             ${reports.length > 0 ? `
-//             <button id="updateMarksBtn" class="mt-4 w-full bg-green-500 text-black font-semibold py-2 rounded hover:bg-green-400">
-//                 Update Marks
-//             </button>` : ""}
-
-//             <button id="closeModalBtn2" class="absolute top-2 right-3 text-gray-400 hover:text-white text-xl">&times;</button>
-//         </div>
-//     `;
-//     document.body.appendChild(modal);
-
-//     modal.querySelector("#closeModalBtn2").onclick = () => modal.remove();
-
-//     // Download handlers
-//     modal.querySelectorAll(".download-btn").forEach(btn => {
-//         const path = btn.dataset.path;
-//         btn.onclick = () => this.downloadReport(path);
-//     });
-
-//     // Update marks
-//     const updateBtn = modal.querySelector("#updateMarksBtn");
-//     if (updateBtn) {
-//         updateBtn.onclick = async () => {
-//             const marksData = [];
-            
-//             modal.querySelectorAll(".marks-input").forEach(input => {
-//                 const studentId = input.dataset.studentId;
-//                 const studentReport = reports.find(r => r.student_id === studentId);
-//                 const studentName = studentReport?.student_name || "";
-
-//                 marksData.push({
-//                     student_id: studentId,
-//                     student_name: studentName,
-//                     marks: input.value
-//                 });
-//             });
-
-//             try {
-//                 const res = await fetch(`${this.base_server}/update-marks`, {
-//                     method: "POST",
-//                     headers: { "Content-Type": "application/json" },
-//                     body: JSON.stringify({
-//                         college,
-//                         faculty,
-//                         subject,
-//                         classId,
-//                         marksData
-//                     })
-//                 });
-//                 const data = await res.json();
-//                 this.showToast(data.message || "Marks updated successfully");
-//             } catch (err) {
-//                 console.error(err);
-//                 this.showToast("❌Failed to update marks.");
-//             }
-//         };
-//     }
-// }
 
 showClassReportViewerModal(subject, reports, college, faculty, classId) {
     const modal = document.createElement("div");
@@ -1943,10 +2045,12 @@ async showPostQuestionModal() {
     const classId = classInput.value.trim();
     const questionText = questionInput.value.trim();
 
+
     if (!subject || !classId || !questionText || !faculty || !institute) {
       this.showToast("❌ Please fill all fields before submitting.");
       return;
     }
+    this.showToast("⏳ Posting Question...");
 
     try {
       const response = await fetch(`${this.base_server}/post_question`, {
@@ -1973,6 +2077,165 @@ async showPostQuestionModal() {
 
 
 
+
+
+// async showUploadSessionModal() {
+//   let modal = document.getElementById("uploadSessionModal");
+
+//   if (!modal) {
+//     const modalHTML = `
+//       <div id="uploadSessionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
+//         <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-96">
+//           <h2 class="text-lg font-bold text-[#61dafb] mb-4">Upload Session</h2>
+          
+//           <label class="block text-sm text-white mb-1">Faculty:</label>
+//           <div class="relative w-full mb-4">
+//             <input id="uploadFacultyInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+//           </div>
+
+//           <label class="block text-sm text-white mb-1">Subject:</label>
+//           <div class="relative w-full mb-4">
+//             <input id="uploadSubjectInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+//           </div>
+
+//           <label class="block text-sm text-white mb-1">Class:</label>
+//           <div class="relative w-full mb-4">
+//             <input id="uploadClassInput" type="text" class="w-full p-2 rounded bg-[#1e1e1e] text-white">
+//           </div>
+
+//           <div class="flex justify-end space-x-2">
+//             <button id="cancelUploadBtn" class="text-white hover:text-red-400">Cancel</button>
+//             <button id="submitUploadBtn" class="bg-[#61dafb] text-black px-4 py-1 rounded hover:bg-[#21a1f1]">Upload</button>
+//           </div>
+//         </div>
+//       </div>
+//     `;
+//     document.body.insertAdjacentHTML("beforeend", modalHTML);
+//     modal = document.getElementById("uploadSessionModal");
+//   }
+
+//   modal.classList.remove("hidden");
+//   modal.classList.add("flex");
+
+//   const facultyInput = document.getElementById("uploadFacultyInput");
+//   const subjectInput = document.getElementById("uploadSubjectInput");
+//   const classInput = document.getElementById("uploadClassInput");
+
+//   // ✅ Clean up dropdown lists
+//   const cleanupLists = () => {
+//     ["faculty-list", "subject-list", "class-list"].forEach(id => {
+//       const el = document.getElementById(id);
+//       if (el) el.remove();
+//     });
+//   };
+
+//   // ✅ Clear subject + class when faculty changes
+//   facultyInput.addEventListener("input", () => {
+//     subjectInput.value = "";
+//     classInput.value = "";
+//     cleanupLists();
+//   });
+
+//   // ✅ Clear class when subject changes
+//   subjectInput.addEventListener("input", () => {
+//     classInput.value = "";
+//     const c = document.getElementById("class-list");
+//     if (c) c.remove();
+//   });
+
+//   // ✅ Setup autocomplete
+//   try {
+//     cleanupLists();
+//     this.setupFacultyAutocomplete(facultyInput, this.user.institute, this.base_server);
+//     this.setupSubjectAutocomplete(subjectInput, this.user.institute, facultyInput, this.base_server);
+//     this.setupClassAutocomplete(classInput, this.user.institute, facultyInput, subjectInput, this.base_server);
+//   } catch (err) {
+//     console.error("Error initializing autocompletes:", err);
+//   }
+
+//   document.getElementById("cancelUploadBtn").onclick = () => {
+//     cleanupLists();
+//     modal.classList.add("hidden");
+//     modal.classList.remove("flex");
+//   };
+
+//   document.getElementById("submitUploadBtn").onclick = async () => {
+//     const faculty = facultyInput.value.trim();
+//     const subject = subjectInput.value.trim();
+//     const classId = classInput.value.trim();
+
+//     const studentId = this.user.id;
+//     const studentName = this.user.name || "default";
+//     const college = this.user.institute;
+//     const openedFiles = this.openedFilePaths || [];
+//     const currentFolder = this.currentFolderPath || "";
+
+//     if (!faculty || !subject || !classId || !college || !studentName || !studentId) {
+//       this.showToast("⚠️ Please fill all required fields.");
+//       return;
+//     }
+//     this.showToast("⏳ Uploading Your Code Session...");
+
+//     try {
+//       // Step 1: Export PDF
+//       const tempFilePath = await window.electronAPI.writeOutputToTempFile(this.outputs);
+//       const exportResult = await window.electronAPI.exportReport(
+//         openedFiles,
+//         studentName,
+//         currentFolder,
+//         tempFilePath
+//       );
+
+//       if (!exportResult.success || !exportResult.path) {
+//         this.showToast("❌ Failed to generate session PDF.");
+//         return;
+//       }
+
+//       // Step 2: Read PDF as Blob
+//       const pdfBlob = await window.electronAPI.readFileAsBlob(exportResult.path);
+
+//       // Step 3: Upload to Flask API
+//       const formData = new FormData();
+//       formData.append("file", pdfBlob, "session.pdf");
+//       formData.append("college", college);
+//       formData.append("faculty", faculty);
+//       formData.append("subject", subject);
+//       formData.append("class", classId);
+//       formData.append("pdf_name", studentName);
+//       formData.append("student_name", studentName);
+//       formData.append("student_id", studentId);
+
+//       const response = await fetch(`${this.base_server}/upload-report`, {
+//         method: "POST",
+//         body: formData,
+//       });
+
+//       if (!response.ok) {
+//         const errorText = await response.text();
+//         console.error("Upload failed:", errorText);
+//         this.showToast("❌ Upload failed: " + errorText);
+//       } else {
+//         const result = await response.json();
+//         console.log("✅ Upload success:", result);
+//         this.showToast("✅ Session uploaded successfully!");
+//       }
+//     } catch (err) {
+//       console.error("Upload error:", err);
+//       this.showToast("❌ Upload error: " + err.message);
+//     }
+
+//     cleanupLists();
+//     modal.classList.add("hidden");
+//     modal.classList.remove("flex");
+
+//     const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
+//     if (refreshed) {
+//       requestIdleCallback(() => {
+//         this.loadFolderToSidebar(refreshed);
+//       });
+//     }
+//   };
+// }
 
 
 async showUploadSessionModal() {
@@ -2016,6 +2279,11 @@ async showUploadSessionModal() {
   const facultyInput = document.getElementById("uploadFacultyInput");
   const subjectInput = document.getElementById("uploadSubjectInput");
   const classInput = document.getElementById("uploadClassInput");
+
+  // ✅ Autofill if available
+  if (this.fetchedfaculty) facultyInput.value = this.fetchedfaculty;
+  if (this.fetchedsubject) subjectInput.value = this.fetchedsubject;
+  if (this.fetchedclassid) classInput.value = this.fetchedclassid;
 
   // ✅ Clean up dropdown lists
   const cleanupLists = () => {
@@ -2070,6 +2338,7 @@ async showUploadSessionModal() {
       this.showToast("⚠️ Please fill all required fields.");
       return;
     }
+    this.showToast("⏳ Uploading Your Code Session...");
 
     try {
       // Step 1: Export PDF
@@ -2136,18 +2405,13 @@ async showUploadSessionModal() {
 
 
 
-
-
   toggleEditorActions(show) {
     document.getElementById('editorActions').classList.toggle('hidden', !show);
   }
 
 
-  showWelcomePage() {
+showWelcomePage() {
   this.toggleEditorActions(false);
-  // const app = document.getElementById('app');
-  // app.classList.remove('hidden');
-  // document.getElementById('editorLayout').classList.add('hidden');
 
   document.getElementById('editorLayout').classList.add('hidden');
   
@@ -2161,30 +2425,27 @@ async showUploadSessionModal() {
         ${this.button('Student', 'student')}
         ${this.button('Teacher', 'teacher')}
         ${this.button('Proceed as Guest', 'guest')}
-        ${this.button('Signup', 'signup')}
       </div>
     </div>
   `;
-
-   
 
   document.querySelectorAll('button[data-role]').forEach(btn => {
     const role = btn.dataset.role;
     btn.onclick = () => {
       if (role === 'guest') this.showEditor();
-      else if (role === 'signup') this.showSignupRoleSelect();
       else this.showLoginForm(role);
     }; 
   });
-
 }
-  button(label, role) {
-    return `
-      <button data-role="${role}" class="w-full py-4 px-8 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-xl font-bold text-white">
-        ${label}
-      </button>
-    `;
-  }
+
+button(label, role) {
+  return `
+    <button data-role="${role}" class="w-full py-4 px-8 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-xl font-bold text-white">
+      ${label}
+    </button>
+  `;
+}
+
 
 
 showSignupRoleSelect() {
@@ -2394,6 +2655,84 @@ setupInstituteAutocomplete(inputElement, fetchInstitutesFunc) {
 }
 
 
+// showLoginForm(role) {
+//   this.user.role = role;
+//   const isStudent = role === "student";
+//   const title = `${role.charAt(0).toUpperCase() + role.slice(1)} Login`;
+
+//   const app = document.getElementById('app');
+//   app.innerHTML = `
+//     <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+//       <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700 relative">
+//         <h2 class="text-4xl font-extrabold mb-8 text-white text-center">${title}</h2>
+//         <form id="loginForm" class="space-y-6">
+//           ${this.inputField('Institute', 'text', 'instituteInput')}
+//           ${isStudent ? this.inputField('Roll Number', 'text') : this.inputField('Email', 'email')}
+//           ${this.inputField('Password', 'password')}
+//           <button type="submit"
+//             class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+//             Login
+//           </button>
+//           <button type="button" id="forgotBtn" class="w-full py-4 px-6 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">Forgot Password?</button>
+//           <button type="button" id="backBtn"
+//             class="w-full py-4 px-6 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
+//             Back
+//           </button>
+//         </form>
+//         <div id="suggestions" class="absolute bg-white text-black w-full mt-1 rounded shadow max-h-48 overflow-y-auto z-50 hidden"></div>
+//       </div>
+//     </div>
+//   `;
+
+//   // Bind Back button
+//   document.getElementById('backBtn').onclick = () => this.showWelcomePage();
+//   const forgotBtn = document.getElementById('forgotBtn');
+//   if (forgotBtn) forgotBtn.onclick = () => this.showForgotPasswordForm(role);
+
+
+//   // Setup autocomplete
+//   const instituteInput = document.getElementById('loginForm').querySelector('input[placeholder="Institute"]');
+//   this.setupInstituteAutocomplete(instituteInput, () => this.fetchInstitutesFromBackend());
+
+
+//   // Form submit logic remains the same...
+//   document.getElementById('loginForm').onsubmit = async e => {
+//     e.preventDefault();
+//     const institute = instituteInput.value.trim();
+//     const password = document.querySelector('#loginForm input[placeholder="Password"]').value.trim();
+//     const email_or_roll = isStudent
+//       ? document.querySelector('#loginForm input[placeholder="Roll Number"]').value.trim()
+//       : document.querySelector('#loginForm input[placeholder="Email"]').value.trim();
+
+//     const payload = { institute, role, email_or_roll, password };
+
+//     try {
+//       const res = await fetch(`${this.base_server}/login`, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify(payload)
+//       });
+
+//       const data = await res.json().catch(() => null);
+
+//       if (data?.success) {
+//         this.user.institute = institute;
+//         if (role === "student") this.user.name = data.data.name;
+//         this.user.id = role === "student" ? data.data.student_id : data.data.email;
+//         this.user.role = role;
+       
+//         this.showEditor();
+//         this.showToast('✅ Login successful');
+//       } else {
+//         this.showToast(`❌ ${data?.message || 'Login failed'}`);
+//       }
+//     } catch (err) {
+//       console.error(err);
+//       this.showToast('❌ Login failed');
+//     }
+//   };
+// }
+
 showLoginForm(role) {
   this.user.role = role;
   const isStudent = role === "student";
@@ -2408,10 +2747,20 @@ showLoginForm(role) {
           ${this.inputField('Institute', 'text', 'instituteInput')}
           ${isStudent ? this.inputField('Roll Number', 'text') : this.inputField('Email', 'email')}
           ${this.inputField('Password', 'password')}
-          <button type="submit"
-            class="w-full py-4 px-6 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
-            Login
-          </button>
+
+          <!-- Buttons row -->
+          <div class="flex space-x-4 mt-4">
+            <button type="button" id="forgotBtn"
+              class="flex-1 py-3 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
+              Reset Password
+            </button>
+            <button type="submit"
+              class="flex-1 py-3 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+              Login
+            </button>
+          </div>
+
+          <!-- Back button still full width -->
           <button type="button" id="backBtn"
             class="w-full py-4 px-6 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
             Back
@@ -2424,11 +2773,12 @@ showLoginForm(role) {
 
   // Bind Back button
   document.getElementById('backBtn').onclick = () => this.showWelcomePage();
+  const forgotBtn = document.getElementById('forgotBtn');
+  if (forgotBtn) forgotBtn.onclick = () => this.showForgotPasswordForm(role);
 
   // Setup autocomplete
   const instituteInput = document.getElementById('loginForm').querySelector('input[placeholder="Institute"]');
   this.setupInstituteAutocomplete(instituteInput, () => this.fetchInstitutesFromBackend());
-
 
   // Form submit logic remains the same...
   document.getElementById('loginForm').onsubmit = async e => {
@@ -2464,6 +2814,247 @@ showLoginForm(role) {
     } catch (err) {
       console.error(err);
       this.showToast('❌ Login failed');
+    }
+  };
+}
+
+
+// original
+// showForgotPasswordForm() {
+//   const app = document.getElementById('app');
+//   app.innerHTML = `
+//     <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+//       <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700 relative">
+//         <h2 class="text-3xl font-extrabold mb-6 text-white text-center">Forgot Password</h2>
+
+//         <form id="forgotForm" class="space-y-6">
+//         <select id="roleSelect" class="w-full p-3 rounded">
+//             <option value="student">Student</option>
+//             <option value="teacher">Teacher</option>
+//           </select>
+//           ${this.inputField('Institute', 'text', 'instituteInput')}
+          
+//           ${this.inputField('Email', 'email', 'emailInput')}
+//           <button type="button" id="sendOtpBtn"
+//             class="w-full py-3 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+//             Send OTP
+//           </button>
+//           <button type="button" id="backBtnFP"
+//             class="w-full py-3 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
+//             Back
+//           </button>
+//         </form>
+
+//         <form id="verifyForm" class="space-y-6 mt-4 hidden">
+//           <input placeholder="OTP (6 digits)" class="w-full p-3 rounded" id="otpInput" />
+//           <input placeholder="New Password" type="password" class="w-full p-3 rounded" id="newPasswordInput" />
+//           <button type="button" id="resetPasswordBtn"
+//             class="w-full py-3 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+//             Reset Password
+//           </button>
+//         </form>
+//       </div>
+//     </div>
+//   `;
+
+//   // Back button
+//   document.getElementById('backBtnFP').onclick = () => this.showWelcomePage();
+
+
+  
+
+//   const instituteInput = document.getElementById('instituteInput');
+//   const emailInput = document.getElementById('emailInput');
+//   const roleSelect = document.getElementById('roleSelect');
+
+//   // Send OTP
+//   document.getElementById('sendOtpBtn').onclick = async () => {
+//     const institute = (instituteInput.value || '').trim();
+//     const email = (emailInput.value || '').trim();
+//     const role = roleSelect.value;
+
+//     if (!institute || !email) {
+//       this.showToast('❌ Please enter institute, role and email');
+//       return;
+//     }
+
+//     try {
+//       const res = await fetch(`${this.base_server}/send-reset-otp`, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({ institute, role, email })
+//       });
+//       const data = await res.json().catch(() => null);
+//       if (data?.success) {
+//         document.getElementById('forgotForm').classList.add('hidden');
+//         document.getElementById('verifyForm').classList.remove('hidden');
+//         this.showToast('✅ OTP sent to email');
+//       } else {
+//         this.showToast(`❌ ${data?.message || 'Email not found'}`);
+//       }
+//     } catch (err) {
+//       console.error(err); 
+//       this.showToast('❌ Error sending OTP');
+//     }
+//   };
+
+//   // Reset password
+//   document.getElementById('resetPasswordBtn').onclick = async () => {
+//     const institute = (instituteInput.value || '').trim();
+//     const email = (emailInput.value || '').trim();
+//     const role = roleSelect.value;
+//     const otp = (document.getElementById('otpInput').value || '').trim();
+//     const newPassword = (document.getElementById('newPasswordInput').value || '').trim();
+
+//     if (!otp || !newPassword) {
+//       this.showToast('❌ Enter OTP and new password');
+//       return;
+//     }
+
+//     try {
+//       const res = await fetch(`${this.base_server}/verify_reset_otp`, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({ institute, role, email, otp, new_password: newPassword })
+//       });
+//       const data = await res.json().catch(() => null);
+//       if (data?.success) {
+//         this.showToast('✅ Password updated. Please login.');
+//         this.showLoginForm(role);
+//       } else {
+//         this.showToast(`❌ ${data?.message || 'Reset failed'}`);
+//       }
+//     } catch (err) {
+//       console.error(err);
+//       this.showToast('❌ Error resetting password');
+//     }
+//   };
+// }
+
+
+showForgotPasswordForm() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="h-full w-full flex items-center justify-center px-4 bg-gradient-to-br from-gray-800 via-gray-900 to-gray-950">
+      <div class="bg-gray-800/80 p-10 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700 relative">
+        <h2 class="text-3xl font-extrabold mb-6 text-white text-center">Forgot Password</h2>
+
+        <form id="forgotForm" class="space-y-6">
+          <select id="roleSelect" class="w-full p-3 rounded bg-gray-700 text-white">
+            <option value="student">Student</option>
+            <option value="teacher">Teacher</option>
+          </select>
+
+          ${this.inputField('Institute', 'text', 'instituteInput')}
+          <div id="dynamicFields">
+            ${this.inputField('Email', 'email', 'emailInput')}
+          </div>
+
+          <button type="button" id="sendOtpBtn"
+            class="w-full py-3 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+            Send OTP
+          </button>
+          <button type="button" id="backBtnFP"
+            class="w-full py-3 mt-4 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-bold text-white">
+            Back
+          </button>
+        </form>
+
+        <form id="verifyForm" class="space-y-6 mt-4 hidden">
+          <input placeholder="OTP (6 digits)" class="w-full p-3 rounded" id="otpInput" />
+          <input placeholder="New Password" type="password" class="w-full p-3 rounded" id="newPasswordInput" />
+          <button type="button" id="resetPasswordBtn"
+            class="w-full py-3 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-teal-500 hover:to-teal-600 text-lg font-bold text-white">
+            Reset Password
+          </button>
+        </form>
+      </div>
+    </div>
+  `;
+
+  // Back button
+  document.getElementById('backBtnFP').onclick = () => this.showWelcomePage();
+
+  const roleSelect = document.getElementById('roleSelect');
+  const dynamicFields = document.getElementById('dynamicFields');
+
+  // 🔹 Change input fields based on role
+  roleSelect.addEventListener('change', () => {
+    if (roleSelect.value === 'teacher') {
+      dynamicFields.innerHTML = `
+        ${this.inputField('Admin Password', 'password', 'adminPasswordInput')}
+        ${this.inputField('Teacher Email', 'email', 'emailInput')}
+      `;
+    } else {
+      dynamicFields.innerHTML = `
+        ${this.inputField('Email', 'email', 'emailInput')}
+      `;
+    }
+  });
+
+  const instituteInput = document.getElementById('instituteInput');
+
+  // Send OTP
+  document.getElementById('sendOtpBtn').onclick = async () => {
+    const institute = (instituteInput.value || '').trim();
+    const role = roleSelect.value;
+    const email = (document.getElementById('emailInput')?.value || '').trim();
+    const adminPassword = role === "teacher" ? (document.getElementById('adminPasswordInput')?.value || '').trim() : null;
+
+    if (!institute || !email || (role === "teacher" && !adminPassword)) {
+      this.showToast('❌ Please enter all required fields');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${this.base_server}/send-reset-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ institute, role, email, admin_password: adminPassword })
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success) {
+        document.getElementById('forgotForm').classList.add('hidden');
+        document.getElementById('verifyForm').classList.remove('hidden');
+        this.showToast('✅ OTP sent to email');
+      } else {
+        this.showToast(`❌ ${data?.message || 'Failed to send OTP'}`);
+      }
+    } catch (err) {
+      console.error(err); 
+      this.showToast('❌ Error sending OTP');
+    }
+  };
+
+  // Reset password (unchanged)
+  document.getElementById('resetPasswordBtn').onclick = async () => {
+    const institute = (instituteInput.value || '').trim();
+    const role = roleSelect.value;
+    const email = (document.getElementById('emailInput')?.value || '').trim();
+    const otp = (document.getElementById('otpInput').value || '').trim();
+    const newPassword = (document.getElementById('newPasswordInput').value || '').trim();
+
+    if (!otp || !newPassword) {
+      this.showToast('❌ Enter OTP and new password');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${this.base_server}/verify_reset_otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ institute, role, email, otp, new_password: newPassword })
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success) {
+        this.showToast('✅ Password updated. Please login.');
+        this.showLoginForm(role);
+      } else {
+        this.showToast(`❌ ${data?.message || 'Reset failed'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      this.showToast('❌ Error resetting password');
     }
   };
 }
@@ -2581,14 +3172,29 @@ async logout() {
 }
 
 
-  inputField(label, type) {
-    return `
-      <div>
-        <label class="block text-sm mb-1 text-gray-200">${label}</label>
-        <input type="${type}" placeholder="${label}" class="w-full p-3 rounded-lg bg-gray-700/60 border border-gray-600 text-white placeholder-gray-400">
-      </div>
-    `;
-  }
+
+inputField(label, type, id = "") {
+  return `
+    <div>
+      <label for="${id}" class="block text-sm mb-1 text-gray-200">${label}</label>
+      <input 
+        type="${type}" 
+        id="${id}" 
+        placeholder="${label}" 
+        class="w-full p-3 rounded-lg bg-gray-700/60 border border-gray-600 text-white placeholder-gray-400"
+      />
+    </div>
+  `;
+}
+
+  // inputField(label, type) {
+  //   return `
+  //     <div>
+  //       <label class="block text-sm mb-1 text-gray-200">${label}</label>
+  //       <input type="${type}" placeholder="${label}" class="w-full p-3 rounded-lg bg-gray-700/60 border border-gray-600 text-white placeholder-gray-400">
+  //     </div>
+  //   `;
+  // }
 
   async showEditor() {
     this.toggleEditorActions(true);
@@ -2597,10 +3203,10 @@ async logout() {
   //   document.getElementById('app').classList.add('hidden');      // hide welcome/login
   // document.getElementById('editorLayout').classList.remove('hidden'); // show editor
 
-    console.log("inside showeditor");
-    // await window.electronAPI.login();
+    // console.log("inside showeditor");
+    // // await window.electronAPI.login();
     
-    console.log("inside showeditor");
+    // console.log("inside showeditor");
 
     this.setupSidebar();
     this.setupTabArea();
@@ -2628,23 +3234,23 @@ async logout() {
       }; 
       // <button id="joinClassBtn" class="hover:text-teal-400 hidden">🎓 Join Class</button>
 
-      const jcBtn = document.getElementById('joinClassBt');
-        if (this.user.role === 'student') {
-          jcBtn.classList.remove('hidden');
-          jcBtn.onclick = () => {
-            this.joinClass();
-          };
-        }
+      // const jcBtn = document.getElementById('joinClassBt');
+      //   if (this.user.role === 'student') {
+      //     jcBtn.classList.remove('hidden');
+      //     jcBtn.onclick = () => {
+      //       this.joinClass();
+      //     };
+      //   }
 
         this.initFileMenuUserActions(); 
 
-    const vcBtn = document.getElementById('viewClassSubmissionsBtn');
-    if (this.user.role === 'teacher') {
-      vcBtn.classList.remove('hidden');
-      vcBtn.onclick = () => {
-        this.viewClassSubmissions();
-      };
-    };
+    // const vcBtn = document.getElementById('viewClassSubmissionsBtn');
+    // if (this.user.role === 'teacher') {
+    //   vcBtn.classList.remove('hidden');
+    //   vcBtn.onclick = () => {
+    //     this.viewClassSubmissions();
+    //   };
+    // };
 
     this.toggleCopilotPane();
 
@@ -2771,7 +3377,7 @@ setupSidebarContextMenu() {
         // Remove it directly from the array
         this.sidebarFiles.splice(index, 1);
       }
-      console.log("sidebar files:",this.sidebarFiles);
+      // console.log("sidebar files:",this.sidebarFiles);
       this.deleteFileFromTree(this.currentTree, filePath);
 
       const refreshed = await window.electronAPI.getFolderTree(this.currentFolderPath);
@@ -2850,7 +3456,7 @@ startInlineRename(fileItem, file) {
       const newPath = await window.electronAPI.joinPath(dirPath, newName);
       const exists = await window.electronAPI.fileExists(newPath);
       if (exists) {
-        alert('A file or folder with this name already exists.');
+        this.showToast('A file or folder with this name already exists.');
         fileItem.textContent = file.name;
         resolve();
         return;

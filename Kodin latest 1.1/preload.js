@@ -90,23 +90,13 @@ saveFile: (filePath, content) => ipcRenderer.invoke('dialog:saveFile', { filePat
 
   
 
-  login: () => ipcRenderer.invoke("terminal-login"),
-  logout: () => ipcRenderer.invoke("terminal-logout"),
-  sendInput: (data) => ipcRenderer.send("terminal-input", data),
-  resize: (cols, rows) => ipcRenderer.send("terminal-resize", { cols, rows }),
-  printPrompt: () => ipcRenderer.invoke("terminal-print-prompt"),
+  // login: () => ipcRenderer.invoke("terminal-login"),
+  // logout: () => ipcRenderer.invoke("terminal-logout"),
+  // sendInput: (data) => ipcRenderer.send("terminal-input", data),
+  // resize: (cols, rows) => ipcRenderer.send("terminal-resize", { cols, rows }),
+  // printPrompt: () => ipcRenderer.invoke("terminal-print-prompt"),
   
 
-  // Terminal output listener
-  // onOutput: (callback) => {
-  //   // Remove old listener to prevent double echo
-  //   ipcRenderer.removeAllListeners("terminal-output");
-
-  //   // Subscribe new output
-  //   ipcRenderer.send("terminal-subscribe-output");
-
-  //   ipcRenderer.on("terminal-output", (_, data) => callback(data));
-  // },
 
   // Optional: remove output listener explicitly
   removeOutputListener: (callback) => {
@@ -141,7 +131,7 @@ startInteractiveProcess: (cmd, args = [], filePath = null) => {
   runCommand: (cmd, args, filePath) => ipcRenderer.invoke('runCommand', cmd, args, filePath) ,// Add this if not present
    finishInteractive: (pid) => ipcRenderer.invoke('finishInteractive', pid),
 
-    openShell: () => ipcRenderer.invoke("openShell"),
+  openShell: () => ipcRenderer.invoke("openShell"),
   closeShell: () => ipcRenderer.invoke("closeShell"),
   resizeShell: (cols, rows) => ipcRenderer.invoke("resizeShell", cols, rows),
   sendTerminalInput: (data) => ipcRenderer.send("terminal-input", data),
@@ -154,12 +144,12 @@ startInteractiveProcess: (cmd, args = [], filePath = null) => {
   onModeChanged: (callback) => {
     ipcRenderer.removeAllListeners('mode-changed');
     ipcRenderer.on('mode-changed', (event, mode) => callback(mode));
-  }
+  },
+  //  resolveTutorialPdf: (fileName) => ipcRenderer.invoke("resolve-tutorial-pdf", fileName)
+
+   resolveTutorialPdf: (fileName) => `app://pdfs/${fileName}` 
 
 
 });
-
-
-
 
 

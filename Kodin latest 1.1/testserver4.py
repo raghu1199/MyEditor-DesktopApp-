@@ -9,7 +9,6 @@ from io import BytesIO
 import pandas as pd
 import hashlib
 from urllib.parse import unquote
-from werkzeug.utils import secure_filename
 
 
 
@@ -40,8 +39,8 @@ from werkzeug.utils import secure_filename
 # model.eval()
 
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "C:/Users/Raghvendra/Desktop/MyEditorServer/editor.json"
-# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/var/www/myflaskapp/editor.json"
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "C:/Users/Raghvendra/Desktop/MyEditorServer/editor.json"
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/var/www/myflaskapp/editor.json"
 
 
 app = Flask(__name__)
@@ -657,231 +656,6 @@ def signup():
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
-    
-
-
-
-# ✅ Firestore client assumed to be initialized
-# from google.cloud import firestore
-# firestore_client = firestore.Client()
-
-# def hash_password(password):
-#     import hashlib
-#     return hashlib.sha256(password.encode()).hexdigest()
-
-
-@app.route("/batch_signup", methods=["POST"])
-def batch_signup():
-    try:
-        if "file" not in request.files:
-            return jsonify({"success": False, "message": "No file uploaded"}), 400
-        
-        file = request.files["file"]
-        filename = secure_filename(file.filename)
-        
-        if not filename.endswith((".xlsx", ".xls")):
-            return jsonify({"success": False, "message": "Only Excel files are supported"}), 400
-        
-        df = pd.read_excel(file)
-
-        # ✅ Required columns
-        required_columns = {"institute", "role", "email"}
-        if not required_columns.issubset(df.columns):
-            return jsonify({
-                "success": False,
-                "message": f"Missing required columns. Required: {required_columns} (+ name & roll_number for students)"
-            }), 400
-
-        result_data = []
-        errors = []
-
-        for _, row in df.iterrows():
-            try:
-                institute = str(row["institute"]).strip()
-                role = str(row["role"]).strip().lower()
-                email = str(row["email"]).strip().lower() if pd.notna(row["email"]) else ""
-                name = str(row["name"]).strip() if "name" in df.columns and pd.notna(row["name"]) else ""
-
-                # ✅ Only convert roll_number safely for students
-                roll_number = ""
-                if role == "student" and "roll_number" in df.columns and pd.notna(row["roll_number"]):
-                    roll_number = str(row["roll_number"]).strip()
-                    # Remove trailing .0 if Excel stored as float
-                    if roll_number.endswith(".0"):
-                        roll_number = roll_number[:-2]
-
-                if not institute or not role:
-                    errors.append(f"Missing institute/role for row: {row.to_dict()}")
-                    continue
-
-                collection_path = f"institutes/{institute}/{role}s"
-
-                # === STUDENT SIGNUP ===
-                if role == "student":
-                    if not all([roll_number, name, email]):
-                        errors.append(f"Missing student details: {row.to_dict()}")
-                        continue
-
-                    password = f"{roll_number}@123"
-                    doc_ref = firestore_client.collection(collection_path).document(roll_number)
-                    if doc_ref.get().exists:
-                        errors.append(f"Student already exists: {roll_number}")
-                        continue
-                    
-                    doc_ref.set({
-                        "student_id": roll_number,
-                        "name": name,
-                        "email": email,
-                        "password": hash_password(password)
-                    })
-                    result_data.append({"email": email, "username": roll_number, "password": password})
-
-                # === TEACHER SIGNUP ===
-                elif role == "teacher":
-                    if not email:
-                        errors.append(f"Missing teacher email: {row.to_dict()}")
-                        continue
-                    
-                    password = f"{email[:5]}@123"
-                    query = firestore_client.collection(collection_path).where("email", "==", email).get()
-                    if query:
-                        errors.append(f"Teacher already exists: {email}")
-                        continue
-
-                    firestore_client.collection(collection_path).add({
-                        "email": email,
-                        "password": hash_password(password)
-                    })
-                    result_data.append({"email": email, "username": email, "password": password})
-
-                else:
-                    errors.append(f"Invalid role '{role}' for row: {row.to_dict()}")
-
-            except Exception as inner_e:
-                errors.append(f"Error processing row {row.to_dict()}: {str(inner_e)}")
-
-        # ✅ Generate result Excel file
-        output = BytesIO()
-        result_df = pd.DataFrame(result_data)
-        result_df.to_excel(output, index=False)
-        output.seek(0)
-
-        response = send_file(
-            output,
-            download_name="batch_signup_results.xlsx",
-            as_attachment=True,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-        response.headers["X-Errors"] = str(errors) if errors else "None"
-        return response
-
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
-
-
-
-# @app.route("/batch_signup", methods=["POST"])
-# def batch_signup():
-#     try:
-#         if "file" not in request.files:
-#             return jsonify({"success": False, "message": "No file uploaded"}), 400
-        
-#         file = request.files["file"]
-#         filename = secure_filename(file.filename)
-        
-#         if not filename.endswith((".xlsx", ".xls")):
-#             return jsonify({"success": False, "message": "Only Excel files are supported"}), 400
-        
-#         df = pd.read_excel(file)
-
-#         # ✅ Required columns
-#         required_columns = {"institute", "role", "email"}
-#         if not required_columns.issubset(df.columns):
-#             return jsonify({
-#                 "success": False,
-#                 "message": f"Missing required columns. Required: {required_columns} (+ name & roll_number for students)"
-#             }), 400
-
-#         result_data = []
-#         errors = []
-
-#         for _, row in df.iterrows():
-#             try:
-#                 institute = str(row["institute"]).strip()
-#                 role = str(row["role"]).strip().lower()
-#                 email = str(row["email"]).strip().lower() if pd.notna(row["email"]) else ""
-#                 name = str(row["name"]).strip() if "name" in df.columns and pd.notna(row["name"]) else ""
-#                 roll_number = str(row["roll_number"]).strip() if "roll_number" in df.columns and pd.notna(row["roll_number"]) else ""
-
-#                 if not institute or not role:
-#                     errors.append(f"Missing institute/role for row: {row.to_dict()}")
-#                     continue
-
-#                 collection_path = f"institutes/{institute}/{role}s"
-
-#                 # === STUDENT SIGNUP ===
-#                 if role == "student":
-#                     if not all([roll_number, name, email]):
-#                         errors.append(f"Missing student details: {row.to_dict()}")
-#                         continue
-
-#                     password = f"{roll_number}@123"
-#                     doc_ref = firestore_client.collection(collection_path).document(roll_number)
-#                     if doc_ref.get().exists:
-#                         errors.append(f"Student already exists: {roll_number}")
-#                         continue
-                    
-#                     doc_ref.set({
-#                         "student_id": roll_number,
-#                         "name": name,
-#                         "email": email,
-#                         "password": hash_password(password)
-#                     })
-#                     result_data.append({"email": email, "username": roll_number, "password": password})
-
-#                 # === TEACHER SIGNUP ===
-#                 elif role == "teacher":
-#                     if not email:
-#                         errors.append(f"Missing teacher email: {row.to_dict()}")
-#                         continue
-                    
-#                     password = f"{email[:5]}@123"
-#                     query = firestore_client.collection(collection_path).where("email", "==", email).get()
-#                     if query:
-#                         errors.append(f"Teacher already exists: {email}")
-#                         continue
-
-#                     firestore_client.collection(collection_path).add({
-#                         "email": email,
-#                         "password": hash_password(password)
-#                     })
-#                     result_data.append({"email": email, "username": email, "password": password})
-
-#                 else:
-#                     errors.append(f"Invalid role '{role}' for row: {row.to_dict()}")
-
-#             except Exception as inner_e:
-#                 errors.append(f"Error processing row {row.to_dict()}: {str(inner_e)}")
-
-#         # ✅ Generate result Excel file
-#         output = BytesIO()
-#         result_df = pd.DataFrame(result_data)
-#         result_df.to_excel(output, index=False)
-#         output.seek(0)
-
-#         response = send_file(
-#             output,
-#             download_name="batch_signup_results.xlsx",
-#             as_attachment=True,
-#             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-#         )
-
-#         response.headers["X-Errors"] = str(errors) if errors else "None"
-#         return response
-
-#     except Exception as e:
-#         return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -1191,8 +965,8 @@ def get_class_marks():
 
 # ✅ 5️⃣ Run server
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5005, debug=True)
 
-    
+    # app.run(host="0.0.0.0", port=5005)
 
 
