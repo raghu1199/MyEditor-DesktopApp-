@@ -534,11 +534,11 @@ async handleExportFile() {
     
   }
 
-  console.log("outputs in export:",this.outputs);
+  
   // Write outputs to temp file
   const tempFilePath = await window.electronAPI.writeOutputToTempFile(this.outputs);
   const outputPath = tempFilePath;
-  console.log("out in temp file:",outputPath);
+  // console.log("out in temp file:",outputPath);
 
   if (!outputPath) {
     this.showToast("⚠️ No output to export. Please run code first.");
@@ -2424,7 +2424,7 @@ showWelcomePage() {
       <div class="flex flex-col space-y-6 w-full max-w-xs">
         ${this.button('Student', 'student')}
         ${this.button('Teacher', 'teacher')}
-        ${this.button('Proceed as Guest', 'guest')}
+        ${this.button('Guest', 'guest')}
       </div>
     </div>
   `;
@@ -4085,8 +4085,8 @@ async setupOutput() {
       if (this._interactivePid) {
         window.electronAPI.finishInteractive(this._interactivePid).then(result => {
           this.outputs = this._ptyOutput + result.output;
-          this.term.write('\r\n✅ Program finished. Output captured.\r\n');
-          console.log("Captured output:", this.outputs);
+          // this.term.write('\r\n✔Program finished. Output captured.\r\n');
+          // console.log("Captured output:", this.outputs);
         });
         this._setInteractiveMode(false);
         return false;
@@ -4099,12 +4099,12 @@ async setupOutput() {
   window.electronAPI.onModeChanged((mode) => {
     if (mode === 'shell') {
       this._setInteractiveMode(false);
-      this.term.write('\r\n🔄 Switched to Shell Mode...\r\n');
+      // this.term.write('\r\n🔄 Switched to Shell Mode...\r\n');
     } else if (mode === 'program') {
-      this.term.write('\r\n🔄 Switched to Program Mode...\r\n');
+      // this.term.write('\r\n🔄 Switched to Program Mode...\r\n');
     } else if (mode === 'idle') {
       this._setInteractiveMode(false);
-      this.term.write('\r\n🔄 Mode: idle\r\n');
+      // this.term.write('\r\n🔄 Mode: idle\r\n');
     }
   });
 
@@ -4128,7 +4128,7 @@ async setupShellTerminal() {
   this._setInteractiveMode(false);
 
   // let user know
-  this.term.write("\r\n🔄 Switched to Shell Mode...\r\n");
+  // this.term.write("\r\n🔄 Switched to Shell Mode...\r\n");
   this.term.focus();
 }
 
@@ -4208,7 +4208,7 @@ async runCode() {
           args = ['-run', currentTab.filePath];
           cleanup = null;
 
-          append('▶ Running C (TCC, in-memory) interactively...');
+          append('▶ Running C ...');
           const { pid } = await window.electronAPI.startInteractiveProcess(execName, args, currentTab.filePath);
 
           this._setInteractiveMode(true, (data) => window.electronAPI.sendInteractiveInput(pid, data));
@@ -4219,7 +4219,7 @@ async runCode() {
               window.electronAPI.finishInteractive(pid).then(result => {
                 const cleanout = this.cleanOutput(result.output || "");
                 this.outputs+=cleanout;
-                append('✅ Captured final output:');
+                append('✔ Output Saved');
                 append(result.output || "");
               });
               this._setInteractiveMode(false);
@@ -4243,7 +4243,7 @@ async runCode() {
           append(compileResult.stderr);
           return;
         }
-        append('✅ Compilation successful');
+        append('✔ Compilation successful');
         const { pid } = await window.electronAPI.startInteractiveProcess(outExec, [], currentTab.filePath);
 
         this._setInteractiveMode(true, (data) => window.electronAPI.sendInteractiveInput(pid, data));
@@ -4253,8 +4253,10 @@ async runCode() {
           if (e.ctrlKey && e.key === 'Enter') {
             window.electronAPI.finishInteractive(pid).then(result => {
               const cleanout = this.cleanOutput(result.output || "");
-                this.outputs+=cleanout;
-              append('✅ Captured final output:');
+                // this.outputs+=cleanout;
+                this.outputs+=result.output;
+
+              append('✔ Output Saved:');
               append(result.output||"");
             });
             this._setInteractiveMode(false);
@@ -4270,8 +4272,15 @@ async runCode() {
       case 'cpp':
       case 'cc': {
         execName = appTools.gpp || appTools.gcc || 'g++';
-        const outExec = await window.electronAPI.getTempExePath(currentTab.filePath, ext);
-        args = [currentTab.filePath, '-o', outExec];
+
+        const srcFile = await window.electronAPI.fixPathForCompiler(currentTab.filePath);
+        const outExec = await window.electronAPI.fixPathForCompiler(
+          await window.electronAPI.getTempExePath(currentTab.filePath, ext)
+        );
+        args = [srcFile, "-o", outExec];
+
+        // const outExec = await window.electronAPI.getTempExePath(currentTab.filePath, ext);
+        // args = [currentTab.filePath, '-o', outExec];
         cleanup = outExec;
 
         append('🔧 Compiling C++...');
@@ -4281,7 +4290,7 @@ async runCode() {
           append(compileResult.stderr);
           return;
         }
-        append('✅ Compilation successful. Running interactively...');
+        append(' ✔ Compilation successful...');
         const { pid } = await window.electronAPI.startInteractiveProcess(outExec, [], currentTab.filePath);
 
         this._setInteractiveMode(true, (data) => window.electronAPI.sendInteractiveInput(pid, data));
@@ -4292,11 +4301,12 @@ async runCode() {
               window.electronAPI.finishInteractive(pid).then(result => {
                 const cleanout = this.cleanOutput(result.output || "");
                 this.outputs+=cleanout;
+                // this.outputs+=result.output;
 
               
                 // console.log("out in cpp:", this.outputs);
 
-                append('✅ Captured final output:');
+                append('✔ Output Saved  ');
                 append(result.output||"");
               });
 
@@ -4326,7 +4336,8 @@ async runCode() {
             window.electronAPI.finishInteractive(pid).then(result => {
               const cleanout = this.cleanOutput(result.output || "");
               this.outputs+=cleanout;
-              append('✅ Captured final output:');
+              // this.outputs+=result.output;
+              append('✔ Output Saved ');
               append(result.output||"");
             });
             this._setInteractiveMode(false);
@@ -4351,7 +4362,7 @@ async runCode() {
           append(compileResult.stderr);
           return;
         }
-        append('✅ javac finished. Running interactively...');
+        append('✔ javac compilation finished. ..');
 
         const filePath = currentTab.filePath;
         const lastSlashIndex = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
@@ -4371,8 +4382,9 @@ async runCode() {
             window.electronAPI.finishInteractive(pid).then(result => {
               const cleanout = this.cleanOutput(result.output || "");
               this.outputs+=cleanout;
+              // this.outputs+=result.output|| "";
               // console.log("out in java:",this.outputs);
-              append('✅ Captured final output:');
+              append('✔ Output Saved ');
               append(result.output||"");
             });
             this._setInteractiveMode(false);
@@ -4395,6 +4407,7 @@ async runCode() {
         append(result.stdout || '');
         append(result.stderr || '');
         this.outputs = (result.stdout || '') + (result.stderr || '') || '';
+        append('✔ Output Saved ');
         return;
       }
 
@@ -4410,8 +4423,9 @@ async runCode() {
         append(result.stderr || '');
         this.outputs = (result.stdout || '') + (result.stderr || '');
         const cleanout = this.cleanOutput(result.stdout || "");
-        this.outputs+=cleanout;
-        if (result.code === 0 && !result.stderr) append('✅ Executed successfully.');
+        // this.outputs+=cleanout;
+        this.outputs+=result.stdout||"";
+        if (result.code === 0 && !result.stderr) append('✔ Executed successfully.');
         else append('❌ Execution failed.');
         return;
       }
@@ -4428,6 +4442,8 @@ async runCode() {
 }
 
 
+
+
 async setupShellTerminal() {
   // Just open backend shell
   await window.electronAPI.openShell();
@@ -4436,7 +4452,7 @@ async setupShellTerminal() {
     await this.setupOutput(); // ensure terminal exists
   }
 
-  this.term.write("\r\n🔄 Switched to Shell Mode...\r\n");
+  // this.term.write("\r\n🔄 Switched to Shell Mode...\r\n");
 }
 
 

@@ -250,80 +250,29 @@ ipcMain.handle('get-bundled-tools-paths', async () => {
   return resolveBundledTools();
 });
 
-ipcMain.handle('run-command', async (_, { cmd, args = [] }) => {
-  return new Promise((resolve) => {
-    const proc = spawn(cmd, args, {
-      windowsHide: true,
-      shell:true,
-      env: {
-        ...process.env,
-        PATH: extendPathForTool(cmd)
-      }
-    });
+// ipcMain.handle('run-command', async (_, { cmd, args = [] }) => {
+//   return new Promise((resolve) => {
+//     const proc = spawn(cmd, args, {
+//       windowsHide: true,
+//       shell:false,
+//       env: {
+//         ...process.env,
+//         PATH: extendPathForTool(cmd)
+//       }
+//     });
 
-    let stdout = '';
-    let stderr = '';
+//     let stdout = '';
+//     let stderr = '';
 
-    proc.stdout.on('data', d => stdout += d.toString());
-    proc.stderr.on('data', d => stderr += d.toString());
+//     proc.stdout.on('data', d => stdout += d.toString());
+//     proc.stderr.on('data', d => stderr += d.toString());
 
-    proc.on('error', (err) => resolve({ code: 1, stdout: '', stderr: err.message }));
-    proc.on('close', (code) => resolve({ code, stdout, stderr }));
+//     proc.on('error', (err) => resolve({ code: 1, stdout: '', stderr: err.message }));
+//     proc.on('close', (code) => resolve({ code, stdout, stderr }));
 
-    setTimeout(() => { try { proc.kill('SIGTERM'); } catch {} }, 8000);
-  });
-});
-
-
-
-ipcMain.handle('run-sql-stream', async (_event, { cmd, args = [], sqlFile }) => {
-  return new Promise((resolve) => {
-    let stdout = '';
-    let stderr = '';
-
-    // ✅ Wrap executable path for Windows to handle spaces
-    const quotedCmd = process.platform === 'win32' ? `"${cmd}"` :  cmd;
-
-    const proc = spawn(quotedCmd, args, {
-      cwd: process.cwd(),
-      windowsHide: true,
-      shell: true,
-      env: {
-        ...process.env,
-        PATH: extendPathForTool(cmd)
-      }
-    });
-
-    // Capture stdout
-    proc.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-
-    // Capture stderr
-    proc.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    // ✅ Handle errors
-    proc.on('error', (err) => {
-      resolve({ code: 1, stdout, stderr: stderr + '\n' + err.message });
-    });
-
-    // ✅ Handle close
-    proc.on('close', (code) => {
-      resolve({ stdout, stderr, code });
-    });
-
-    // ✅ Pipe SQL file into stdin
-    fs.createReadStream(sqlFile).pipe(proc.stdin);
-
-    // ✅ Timeout after 12 seconds to avoid hanging
-    const timer = setTimeout(() => {
-      try { proc.kill('SIGTERM'); } catch {}
-    }, 12000);
-    proc.on('close', () => clearTimeout(timer));
-  });
-});
+//     setTimeout(() => { try { proc.kill('SIGTERM'); } catch {} }, 8000);
+//   });
+// });
 
 
 
@@ -354,7 +303,7 @@ ipcMain.handle('save-temp-file', async (event, defaultName) => {
 
 ipcMain.handle('join-path', (_, folder, file) => {
   return path.join(folder, file);
-});
+}); 
 
 // const getExportExecutablePath = () => {
 //   return isDev
@@ -539,7 +488,7 @@ ipcMain.handle('save-question-files', async (_, { questionText }) => {
     try {
       await fsp.rm(fullPath, { recursive: true, force: true });
     } catch (err) {
-      console.warn("⚠️ Failed to remove old Question folder (maybe it didn't exist):", err);
+      // console.warn("⚠️ Failed to remove old Question folder (maybe it didn't exist):", err);
     }
 
     // 🔹 Now create a fresh folder
@@ -549,10 +498,16 @@ ipcMain.handle('save-question-files', async (_, { questionText }) => {
     await fsp.writeFile(path.join(fullPath, 'question.txt'), questionText, 'utf-8');
     await fsp.writeFile(path.join(fullPath, 'algorithm.txt'), '', 'utf-8');
 
-    console.log("✅ Fresh Question folder created:", fullPath);
+    
+
+    // ✅ NEW: Create aim.txt and conclusion.txt just like algorithm.txt
+    await fsp.writeFile(path.join(fullPath, 'aim.txt'), '', 'utf-8');
+    await fsp.writeFile(path.join(fullPath, 'conclusion.txt'), '', 'utf-8');
+
+    // console.log("✅ Question folder created:", fullPath);
     return fullPath;
   } catch (err) {
-    console.error('❌ Error saving question files:', err);
+    // console.error('❌ Error saving question files:', err);
     return null;
   }
 });
@@ -604,20 +559,109 @@ let currentMode = "idle"; // "idle" | "shell" | "program"
 const interactiveProcesses = new Map();
 
 // ✅ Normalization function
+// function normalizeOutput(data) {
+//   let cleaned = data.toString();
+
+//   // Remove ANSI escape sequences (colors, cursor control)
+//   cleaned = cleaned.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+
+//   // Convert any \r not followed by \n into proper \r\n
+//   cleaned = cleaned.replace(/\r(?!\n)/g, '\r\n');
+
+//   // Ensure all \n are \r\n for Windows terminal alignment
+//   cleaned = cleaned.replace(/\n/g, '\r\n');
+
+//   return cleaned;
+// }
+
 function normalizeOutput(data) {
-  let cleaned = data.toString();
+  let cleaned = data.toString("utf8"); // ✅ force UTF-8 decoding
 
-  // Remove ANSI escape sequences (colors, cursor control)
-  cleaned = cleaned.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+  // Remove ANSI CSI (e.g. \x1b[31m, \x1b[2J, etc.)
+  cleaned = cleaned.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
 
-  // Convert any \r not followed by \n into proper \r\n
-  cleaned = cleaned.replace(/\r(?!\n)/g, '\r\n');
+  // Remove OSC sequences: ESC ] ... BEL or ST
+  cleaned = cleaned.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "");
 
-  // Ensure all \n are \r\n for Windows terminal alignment
-  cleaned = cleaned.replace(/\n/g, '\r\n');
+  // Remove charset changes (like ESC ( B)
+  cleaned = cleaned.replace(/\x1b\([A-B0-2]/g, "");
+
+  // Remove any stray ESC or control chars except CR/LF/TAB
+  cleaned = cleaned.replace(/[\x00-\x09\x0B-\x1A\x1C-\x1F\x7F]/g, "");
+
+  // Normalize line endings for Windows terminals
+  cleaned = cleaned.replace(/\r(?!\n)/g, "\r\n");
+  cleaned = cleaned.replace(/\n/g, "\r\n");
 
   return cleaned;
 }
+
+
+function safeSpawn(cmd, args = [], options = {}) {
+  return spawn(cmd, args, {
+    ...options,
+    shell: false, // ✅ never use shell:true unless you REALLY need it
+    windowsHide: true,
+  });
+}
+
+
+
+
+
+ipcMain.handle('run-sql-stream', async (_event, { cmd, args = [], sqlFile }) => {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+
+    // ✅ Wrap executable path for Windows to handle spaces
+    // const quotedCmd = process.platform === 'win32' ? `"${cmd}"` :  cmd;
+
+    // const proc = spawn(quotedCmd, args, {
+    //   cwd: process.cwd(),
+    //   windowsHide: true,
+    //   shell: false,
+    //   env: {
+    //     ...process.env,
+    //     PATH: extendPathForTool(cmd)
+    //   }
+    // });
+    const proc = safeSpawn(cmd, args, {
+      cwd: process.cwd(),
+      env: { ...process.env, PATH: extendPathForTool(cmd) },
+    });
+
+
+    // Capture stdout
+    proc.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    // Capture stderr
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    // ✅ Handle errors
+    proc.on('error', (err) => {
+      resolve({ code: 1, stdout, stderr: stderr + '\n' + err.message });
+    });
+
+    // ✅ Handle close
+    proc.on('close', (code) => {
+      resolve({ stdout, stderr, code });
+    });
+
+    // ✅ Pipe SQL file into stdin
+    fs.createReadStream(sqlFile).pipe(proc.stdin);
+
+    // ✅ Timeout after 12 seconds to avoid hanging
+    const timer = setTimeout(() => {
+      try { proc.kill('SIGTERM'); } catch {}
+    }, 12000);
+    proc.on('close', () => clearTimeout(timer));
+  });
+});
 
 
 
@@ -630,7 +674,8 @@ ipcMain.on('sendInteractiveInput', (event, pid, data) => {
 ipcMain.handle('runCommand', async (event, cmd, args = [], filePath = null) => {
   return new Promise((resolve) => {
     const cwd = filePath ? path.dirname(filePath) : process.cwd();
-    const child = spawn(cmd, args, { cwd, shell: true });
+    const child = safeSpawn(cmd, args, { cwd });
+
 
     let stdout = '';
     let stderr = '';
@@ -741,45 +786,6 @@ ipcMain.handle('path:getTempExePath', async (_event, { fileName, ext }) => {
   return exePath;
 });
 
-
-// // openShell
-// ipcMain.handle("openShell", async (event) => {
-//   // kill program PTYs if any
-//   if (currentMode === "program") {
-//     for (const [pid, item] of interactiveProcesses.entries()) {
-//       try { item.process.kill(); } catch (e) {}
-//       interactiveProcesses.delete(pid);
-//     }
-//   }
-
-//   if (shell) {
-//     try { shell.kill(); } catch (e) {}
-//     shell = null;
-//   }
-
-//   const platform = process.platform;
-//   const cmd = platform === "win32" ? "cmd.exe" : "bash";
-//   const args = platform === "win32" ? [] : ["-i"];
-
-//   shell = pty.spawn(cmd, args, {
-//     name: "xterm-color",
-//     cwd: process.cwd(),
-//     env: { ...process.env, TERM: "xterm-256color" },
-//     cols: 120, rows: 40,
-//   });
-
-//   currentMode = "shell";
-//   // notify renderer that mode changed
-//   event.sender.send('mode-changed', currentMode);
-
-//   shell.on("data", (data) => {
-//     event.sender.send("shell-output", normalizeOutput(data));
-//   });
-
-//   return { success: true };
-// });
-
-
 function getDefaultShell() {
   const platform = process.platform;
 
@@ -849,68 +855,6 @@ ipcMain.handle("openShell", async (event) => {
 
 
 
-
-// // helper to pick a safe default shell
-// function getDefaultShell() {
-//   const platform = process.platform;
-
-//   if (platform === "win32") {
-//     // Use COMSPEC if defined, fallback to cmd.exe
-//     return process.env.comspec || "C:\\Windows\\System32\\cmd.exe";
-//   }
-
-//   // macOS/Linux: prefer user shell
-//   if (process.env.SHELL) return process.env.SHELL;
-
-//   // Fallbacks
-//   if (platform === "darwin") return "/bin/zsh"; // macOS default
-//   return "/bin/sh"; // Linux safe default
-// }
-
-// ipcMain.handle("openShell", async (event) => {
-//   // kill program PTYs if any
-//   if (currentMode === "program") {
-//     for (const [pid, item] of interactiveProcesses.entries()) {
-//       try { item.process.kill(); } catch (e) {}
-//       interactiveProcesses.delete(pid);
-//     }
-//   }
-
-//   // kill old shell if any
-//   if (shell) {
-//     try { shell.kill(); } catch (e) {}
-//     shell = null;
-//   }
-
-//   // resolve shell + args
-//   const cmd = getDefaultShell();
-//   const args = process.platform === "win32" ? [] : ["-i"];
-
-//   try {
-//     shell = pty.spawn(cmd, args, {
-//       name: "xterm-color",
-//       cwd: process.cwd(),
-//       env: {
-//         ...process.env,             // ✅ keep PATH and other env vars
-//         TERM: "xterm-256color",
-//       },
-//       cols: 120,
-//       rows: 40,
-//     });
-//   } catch (err) {
-//     console.error("Failed to spawn shell:", err);
-//     return { success: false, error: err.message };
-//   }
-
-//   currentMode = "shell";
-//   event.sender.send("mode-changed", currentMode);
-
-//   shell.on("data", (data) => {
-//     event.sender.send("shell-output", normalizeOutput(data));
-//   });
-
-//   return { success: true };
-// });
 
 
 // startInteractiveProcess (auto-kill shell and notify renderer)
@@ -1009,3 +953,39 @@ ipcMain.handle("closeShell", async () => {
   return { success: true };
 
 });
+
+ipcMain.handle('getSafeSource', async (_, srcPath) => {
+  try {
+    const tmpDir = path.join(os.tmpdir(), "kodin");
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    const safePath = path.join(tmpDir, path.basename(srcPath));
+    fs.copyFileSync(srcPath, safePath);
+
+    return safePath;
+  } catch (err) {
+    console.error("getSafeSource failed:", err);
+    return srcPath; // fallback: original path
+  }
+});
+
+function fixPathForCompiler(p) {
+  if (process.platform === "win32") {
+    try {
+      return fs.realpathSync.native(p); // returns 8.3 short path if needed
+    } catch {
+      return p; // fallback
+    }
+  }
+  return p; // non-Windows: leave as-is
+}
+
+// expose for IPC
+ipcMain.handle("path:fixForCompiler", async (_event, filePath) => {
+  return fixPathForCompiler(filePath);
+});
+
+
+
