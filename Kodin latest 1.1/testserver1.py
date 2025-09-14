@@ -15,13 +15,8 @@ import smtplib
 from email.message import EmailMessage
 import random
 import string
-import time
+import time,re
 from datetime import datetime, timedelta
-
-
-
-
-
 
 # os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "C:/Users/Raghvendra/Desktop/MyEditorServer/editor.json"
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/var/www/myflaskapp/editor.json"
@@ -117,52 +112,6 @@ def otp_doc_ref(institute, role, email):
 
 
 
-
-# @app.route("/send-reset-otp", methods=['POST'])
-# def send_reset_otp():
-#     body = request.get_json() or {}
-#     institute = body.get('institute', '').strip()
-#     role = body.get('role', '').strip()
-#     email = body.get('email', '').strip().lower()
-#     print("inside send otp:",institute,role,email)
-#     if not (institute and role and email):
-#         return jsonify({'success': False, 'message': 'Missing institute/role/email'}), 400
-
-#     # find user doc
-#     user_ref = get_user_doc_ref(institute, role, email)
-#     exists, user_data = check_user_exists(user_ref)
-
-#     if not exists:
-#         return jsonify({'success': False, 'message': 'Email not found'}), 404
-
-#     # generate OTP and store hashed plus expiry
-#     otp = generate_otp()
-#     expires_at = datetime.utcnow() + timedelta(seconds=OTP_EXPIRY_SECONDS)
-#     otp_hashed = bcrypt.hashpw(otp.encode('utf8'), bcrypt.gensalt()).decode('utf8')
-
-#     # store
-#     data = {
-#         'otp_hashed': otp_hashed,
-#         'expires_at': expires_at.timestamp(),
-#         'created_at': datetime.utcnow().timestamp(),
-#         'institute': institute,
-#         'role': role,
-#         'email': email
-#     }
-#     otp_ref = otp_doc_ref(institute, role, email)
-#     otp_ref.set(data)
-
-#     # send email
-#     try:
-#         subject = "Kodin / Password Reset OTP"
-#         body_text = f"Your password reset OTP is: {otp}\n\nThis OTP is valid for {OTP_EXPIRY_SECONDS//60} minutes."
-#         send_email(email, subject, body_text)
-#     except Exception as e:
-#         # If sending fails, remove OTP doc
-#         otp_ref.delete()
-#         return jsonify({'success': False, 'message': f'Failed to send email: {str(e)}'}), 500
-
-#     return jsonify({'success': True, 'message': 'OTP sent'}), 200
 
 @app.route("/send-reset-otp", methods=['POST'])
 def send_reset_otp():
@@ -270,58 +219,6 @@ def verify_reset_otp():
     return jsonify({'success': True, 'message': 'Password updated'}), 200
 
 
-# @app.route('/verify_reset_otp', methods=['POST'])
-# def verify_reset_otp():
-#     body = request.get_json() or {}
-#     institute = body.get('institute', '').strip()
-#     role = body.get('role', '').strip()
-#     email = body.get('email', '').strip().lower()
-#     otp = body.get('otp', '').strip()
-#     new_password = body.get('new_password', '').strip()
-
-#     if not (institute and role and email and otp and new_password):
-#         return jsonify({'success': False, 'message': 'Missing parameters'}), 400
-
-#     otp_ref = otp_doc_ref(institute, role, email)
-#     otp_doc = otp_ref.get()
-#     if not otp_doc.exists:
-#         return jsonify({'success': False, 'message': 'No OTP requested or expired'}), 400
-
-#     otp_data = otp_doc.to_dict()
-#     expires_ts = otp_data.get('expires_at', 0)
-#     if datetime.utcnow().timestamp() > expires_ts:
-#         otp_ref.delete()
-#         return jsonify({'success': False, 'message': 'OTP expired'}), 400
-
-#     otp_hashed = otp_data.get('otp_hashed')
-#     if not otp_hashed or not bcrypt.checkpw(otp.encode('utf8'), otp_hashed.encode('utf8')):
-#         return jsonify({'success': False, 'message': 'Invalid OTP'}), 400
-
-#     # update user password in Firestore
-#     user_ref = get_user_doc_ref(institute, role, email)
-#     exists, actual_user_ref = check_user_exists(user_ref)
-#     if not exists:
-#         otp_ref.delete()
-#         return jsonify({'success': False, 'message': 'User does not exist'}), 404
-
-#     # Hash the new password before saving
-#     hashed_pw = hash_password(new_password)
-   
-
-
-#     # Determine what field you used for password in signup. Common options:
-#     # - 'password' (string)
-#     # - 'password_hash' or 'pw_hash'
-#     # Update below accordingly.
-#     try:
-#         actual_user_ref.update({'password': hashed_pw})
-#     except Exception as e:
-#         return jsonify({'success': False, 'message': f'Error updating password: {str(e)}'}), 500
-
-#     # clean up otp doc
-#     otp_ref.delete()
-
-#     return jsonify({'success': True, 'message': 'Password updated'}), 200
 
 
 @app.route("/get-requests", methods=["POST"])
@@ -350,12 +247,15 @@ def get_requests():
         requests = []
         for doc in students:
             student_data = doc.to_dict()
-            requests.append({
-                "student_id": doc.id,
-                "student_name": student_data.get("student_name", ""),
-                "approved": student_data.get("approved", False),
-                "institute": student_data.get("institute", "")
-            })
+
+            # ✅ Only include students that are NOT approved yet
+            if not student_data.get("approved", False):
+                requests.append({
+                    "student_id": doc.id,
+                    "student_name": student_data.get("student_name", ""),
+                    "approved": False,  # always false because we filter them
+                    "institute": student_data.get("institute", "")
+                })
 
         return jsonify({"requests": requests})
 
@@ -508,6 +408,107 @@ def upload_report():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+
+
+
+
+@app.route("/upload_notes", methods=["POST"])
+def upload_notes():
+    try:
+        college = request.form.get("college")
+        faculty = request.form.get("faculty")
+        subject = request.form.get("subject")
+        note_name = request.form.get("note_name")
+        session_generated = request.form.get("session_generated", "false").lower() == "true"
+
+        if not all([college, faculty, subject, note_name]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        pdf_file = request.files.get("pdf_file")
+        if not pdf_file:
+            return jsonify({"error": "No PDF file provided"}), 400
+
+        # ✅ Build unique note_id
+        timestamp = int(time.time())
+        safe_note_name = re.sub(r"[^a-zA-Z0-9_-]", "_", note_name.strip())  # sanitize
+        safe_subject = re.sub(r"[^a-zA-Z0-9_-]", "_", subject.strip())
+        note_id = f"{faculty}_{safe_subject}_{timestamp}_{safe_note_name}"
+
+        # ✅ Storage path
+        storage_path = f"{college}/{faculty}/{safe_subject}/{note_id}.pdf"
+
+        # ✅ Upload to GCS
+        blob = bucket.blob(storage_path)
+        blob.upload_from_file(pdf_file.stream, content_type="application/pdf")
+
+        # ✅ Ensure root docs
+        firestore_client.collection("Questions").document(college).set({}, merge=True)
+        firestore_client.collection("Questions").document(college).collection(faculty).document(subject).set({}, merge=True)
+
+        # ✅ Firestore metadata
+        note_doc_ref = (
+            firestore_client.collection("Questions")
+            .document(college)
+            .collection(faculty)
+            .document(subject)
+            .collection("notes")
+            .document(note_id)
+        )
+
+        note_doc_ref.set({
+            "note_id": note_id,
+            "note_name": note_name,
+            "storage_path": storage_path,
+            "uploaded_by": faculty,
+            "subject": subject,
+            "session_generated": session_generated,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        }, merge=True)
+
+        return jsonify({
+            "message": "Notes uploaded successfully",
+            "note_id": note_id,
+            "storage_path": storage_path
+        }), 200
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/get-notes", methods=["GET"])
+def get_notes():
+    try:
+        college = request.args.get("college")
+        faculty = request.args.get("faculty")
+        subject = request.args.get("subject")
+
+        if not all([college, faculty, subject]):
+            return jsonify({"error": "Missing fields"}), 400
+
+        notes_ref = (
+            firestore_client.collection("Questions")
+            .document(college)
+            .collection(faculty)
+            .document(subject)
+            .collection("notes")
+        )
+
+        docs = notes_ref.stream()
+        notes = []
+        for doc in docs:
+            data = doc.to_dict()
+            if data:
+                notes.append({
+                    "note_name": data.get("note_name"),
+                    "storage_path": data.get("storage_path"),
+                    "timestamp": data.get("timestamp")
+                })
+
+        return jsonify({"notes": notes}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/get-reports", methods=["GET"])
@@ -865,10 +866,7 @@ def get_view_url():
 
     return jsonify({"signed_url": signed_url})
 
-# Initialize Firestore (do this once at app startup)
-# cred = credentials.Certificate("serviceAccountKey.json")
-# firebase_admin.initialize_app(cred)
-# db = firestore.client()
+
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -933,13 +931,6 @@ def signup():
 
 
 
-# ✅ Firestore client assumed to be initialized
-# from google.cloud import firestore
-# firestore_client = firestore.Client()
-
-# def hash_password(password):
-#     import hashlib
-#     return hashlib.sha256(password.encode()).hexdigest()
 
 
 @app.route("/batch_signup", methods=["POST"])
