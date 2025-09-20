@@ -1403,6 +1403,76 @@ def update_points():
         return jsonify({"error": str(e)}), 500
 
 
+# simple in-memory cache
+leaderboard_cache = {
+    "data": None,
+    "timestamp": None
+}
+
+
+
+@app.route("/update-leaderboard", methods=["POST"])
+def update_leaderboard():
+    """
+    Admin-only: Computes leaderboard, updates cache, and writes
+    rank field for each student with stats in Firestore.
+    """
+    try:
+        data = request.json or {}
+        institute = data.get("institute")
+        role = data.get("role")
+
+        if not all([institute, role]):
+            return jsonify({"error": "Missing required data"}), 400
+
+        # Fetch all students
+        students_ref = firestore_client.collection("institutes").document(institute).collection(f"{role}s")
+        students = list(students_ref.stream())
+
+        if not students:
+            return jsonify({"error": "No students found"}), 404
+
+        leaderboard = []
+        total_students = len(students)  # Include everyone for count
+
+        for doc in students:
+            d = doc.to_dict()
+            # Only include in leaderboard if stats exist
+            if any(d.get(k) for k in ["points", "total_lines", "unique_submissions"]):
+                leaderboard.append({
+                    "student_id": d.get("student_id", doc.id),
+                    "name": d.get("name", "Unknown"),
+                    "points": d.get("points", 0),
+                    "total_lines": d.get("total_lines", 0),
+                    "unique_submissions": d.get("unique_submissions", 0)
+                })
+
+        # Sort by points descending
+        leaderboard.sort(key=lambda x: x["points"], reverse=True)
+
+        # Update Firestore rank field and add rank in local list
+        for idx, student in enumerate(leaderboard, start=1):
+            student["rank"] = idx
+            student_doc_ref = students_ref.document(student["student_id"])
+            student_doc_ref.set({"rank": idx}, merge=True)
+
+        # Slice top 20 for frontend
+        top_20 = leaderboard[:20]
+
+        # Cache leaderboard
+        response_data = {
+            "top_students": top_20,
+            "total_students": total_students
+        }
+        leaderboard_cache["data"] = response_data
+        leaderboard_cache["timestamp"] = datetime.now().isoformat()
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
 @app.route("/get-student-stats", methods=["POST"])
 def get_student_stats():
     try:
@@ -1429,15 +1499,233 @@ def get_student_stats():
         points = student_data.get("points", 0)
         total_lines = student_data.get("total_lines", 0)
         unique_submissions = student_data.get("unique_submissions", 0)
+        rank = student_data.get("rank")  # 🔹 Get rank if available
 
-        return jsonify({
+        response = {
             "points": points,
             "total_lines": total_lines,
-            "unique_submissions": unique_submissions
-        })
+            "unique_submissions": unique_submissions,
+            "rank": rank if rank is not None else None # 🔹 Include rank (None if not present)
+        }
+
+        # 🔹 If leaderboard cache exists, include it in response
+        if leaderboard_cache.get("data"):
+            response["leaderboard"] = leaderboard_cache["data"]
+
+        return jsonify(response)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+
+
+# @app.route("/update-leaderboard", methods=["POST"])
+# def update_leaderboard():
+#     """
+#     Admin-only: Computes leaderboard, updates cache, and writes
+#     rank field for each student in Firestore.
+#     """
+#     try:
+#         data = request.json or {}
+#         institute = data.get("institute")
+#         role = data.get("role")
+
+#         if not all([institute, role]):
+#             return jsonify({"error": "Missing required data"}), 400
+
+#         # Fetch all students
+#         students_ref = firestore_client.collection("institutes").document(institute).collection(f"{role}s")
+#         students = list(students_ref.stream())
+
+#         if not students:
+#             return jsonify({"error": "No students found"}), 404
+
+#         leaderboard = []
+#         for doc in students:
+#             d = doc.to_dict()
+#             leaderboard.append({
+#                 "student_id": doc.id,
+#                 "name": d.get("student_name", ""),
+#                 "points": d.get("points", 0),
+#                 "total_lines": d.get("total_lines", 0),
+#                 "unique_submissions": d.get("unique_submissions", 0)
+#             })
+
+#         # Sort by points descending
+#         leaderboard.sort(key=lambda x: x["points"], reverse=True)
+
+#         # Update Firestore rank field and add rank in local list
+#         for idx, student in enumerate(leaderboard, start=1):
+#             student["rank"] = idx
+#             # Update student document with current rank
+#             student_doc_ref = students_ref.document(student["student_id"])
+#             student_doc_ref.set({"rank": idx}, merge=True)
+
+#         # Slice top 20 for frontend
+#         top_20 = leaderboard[:20]
+
+#         # Cache leaderboard
+#         response_data = {
+#             "top_students": top_20,
+#             "total_students": len(leaderboard)
+#         }
+#         leaderboard_cache["data"] = response_data
+#         leaderboard_cache["timestamp"] = datetime.now().isoformat()
+
+#         return jsonify(response_data)
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+
+# @app.route("/get-leaderboard", methods=["POST"])
+# def get_leaderboard():
+#     try:
+#         data = request.json or {}
+#         institute = data.get("institute")
+#         role = data.get("role")
+#         student_id = data.get("student_id")
+
+#         if not all([institute, role, student_id]):
+#             return jsonify({"error": "Missing required data"}), 400
+
+#         # ✅ Fetch all students in the institute
+#         students_ref = (
+#             firestore_client.collection("institutes")
+#             .document(institute)
+#             .collection(f"{role}s")
+#         )
+#         students = students_ref.stream()
+
+#         leaderboard = []
+#         for doc in students:
+#             d = doc.to_dict()
+#             leaderboard.append({
+#                 "student_id": doc.id,
+#                 "name": d.get("student_name", ""),
+#                 "points": d.get("points", 0),
+#                 "total_lines": d.get("total_lines", 0),
+#                 "unique_submissions": d.get("unique_submissions", 0)
+#             })
+
+#         if not leaderboard:
+#             return jsonify({"error": "No students found"}), 404
+
+#         # ✅ Sort by points (descending)
+#         leaderboard.sort(key=lambda x: x["points"], reverse=True)
+
+#         # ✅ Add ranks
+#         for idx, student in enumerate(leaderboard, start=1):
+#             student["rank"] = idx
+
+#         # ✅ Find personal rank
+#         total_students = len(leaderboard)
+#         personal_rank = next(
+#             (s["rank"] for s in leaderboard if s["student_id"] == student_id),
+#             None
+#         )
+
+#         # ✅ Slice top 20
+#         top_20 = leaderboard[:20]
+
+#         response_data = {
+#             "top_students": top_20,
+#             "personal_rank": personal_rank,
+#             "total_students": total_students
+#         }
+
+#         # 🔹 Update cache
+#         leaderboard_cache["data"] = response_data
+#         leaderboard_cache["timestamp"] = datetime.now().isoformat()
+
+#         return jsonify(response_data)
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+
+
+
+# @app.route("/get-student-stats", methods=["POST"])
+# def get_student_stats():
+#     try:
+#         data = request.json or {}
+#         institute = data.get("institute")
+#         role = data.get("role")
+#         student_id = data.get("student_id")
+
+#         if not all([institute, role, student_id]):
+#             return jsonify({"error": "Missing required data"}), 400
+
+#         # Student reference
+#         student_ref = (
+#             firestore_client.collection("institutes")
+#             .document(institute)
+#             .collection(f"{role}s")
+#             .document(student_id)
+#         )
+#         student_doc = student_ref.get()
+#         if not student_doc.exists:
+#             return jsonify({"error": "Student not found"}), 404
+
+#         student_data = student_doc.to_dict()
+#         points = student_data.get("points", 0)
+#         total_lines = student_data.get("total_lines", 0)
+#         unique_submissions = student_data.get("unique_submissions", 0)
+
+#         response = {
+#             "points": points,
+#             "total_lines": total_lines,
+#             "unique_submissions": unique_submissions
+#         }
+
+#         # 🔹 If leaderboard cache exists, include it in response
+#         if leaderboard_cache.get("data"):
+#             response["leaderboard"] = leaderboard_cache["data"]
+
+#         return jsonify(response)
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+
+
+# @app.route("/get-student-stats", methods=["POST"])
+# def get_student_stats():
+#     try:
+#         data = request.json or {}
+#         institute = data.get("institute")
+#         role = data.get("role")
+#         student_id = data.get("student_id")
+
+#         if not all([institute, role, student_id]):
+#             return jsonify({"error": "Missing required data"}), 400
+
+#         # Student reference
+#         student_ref = (
+#             firestore_client.collection("institutes")
+#             .document(institute)
+#             .collection(f"{role}s")
+#             .document(student_id)
+#         )
+#         student_doc = student_ref.get()
+#         if not student_doc.exists:
+#             return jsonify({"error": "Student not found"}), 404
+
+#         student_data = student_doc.to_dict()
+#         points = student_data.get("points", 0)
+#         total_lines = student_data.get("total_lines", 0)
+#         unique_submissions = student_data.get("unique_submissions", 0)
+
+#         return jsonify({
+#             "points": points,
+#             "total_lines": total_lines,
+#             "unique_submissions": unique_submissions
+#         })
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
 
 

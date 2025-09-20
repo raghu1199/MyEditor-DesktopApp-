@@ -3434,6 +3434,122 @@ inputField(label, type, id = "", value = "") {
 //   });
 // }
 
+// async showDashboard() {
+//   // If modal already exists, just show it
+//   let modal = document.getElementById("studentDashboardModal");
+//   if (modal) {
+//     modal.classList.remove("hidden");
+//     modal.classList.add("flex");
+//     return;
+//   }
+
+//   // Otherwise, create the modal dynamically
+//   const modalHTML = `
+//     <div id="studentDashboardModal" 
+//          class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
+//       <div class="bg-[#2d2d2d] p-6 rounded-lg shadow-lg w-[600px] relative">
+        
+//         <!-- Close Button -->
+//         <button id="closeDashboardBtn" 
+//                 class="absolute top-2 right-2 text-white hover:text-red-400 text-lg">✖</button>
+
+//         <!-- Refresh Button -->
+//         <button id="refreshDashboardBtn" 
+//                 class="absolute top-2 right-10 text-white hover:text-green-400 text-lg">🔄</button>
+
+//         <h2 class="text-xl font-bold text-[#61dafb] mb-6">Dashboard</h2>
+
+//         <!-- User Info -->
+//         <div class="mb-6">
+//           <p class="text-white"><strong>Name:</strong> ${this.user.name}</p>
+//           <p class="text-white"><strong>Role:</strong> ${this.user.role}</p>
+//           <p class="text-white"><strong>ID:</strong> ${this.user.id}</p>
+//         </div>
+
+//         <!-- Stats Section -->
+//         <div class="grid grid-cols-3 gap-4 mb-6">
+//           <div class="bg-[#1e1e1e] p-4 rounded-lg text-center">
+//             <h3 class="text-[#61dafb] font-semibold">Points</h3>
+//             <p id="dashboardPoints" class="text-white text-lg">0</p>
+//           </div>
+//           <div class="bg-[#1e1e1e] p-4 rounded-lg text-center">
+//             <h3 class="text-[#61dafb] font-semibold">Lines of Code</h3>
+//             <p id="dashboardLOC" class="text-white text-lg">0</p>
+//           </div>
+//           <div class="bg-[#1e1e1e] p-4 rounded-lg text-center">
+//             <h3 class="text-[#61dafb] font-semibold">Unique Submissions</h3>
+//             <p id="dashboardUnique" class="text-white text-lg">0</p>
+//           </div>
+//         </div>
+
+//         <!-- Leaderboard Preview -->
+//         <div class="mb-6">
+//           <h3 class="text-[#61dafb] font-semibold mb-2">Leaderboard</h3>
+//           <div id="leaderboardList" class="space-y-2 max-h-40 overflow-y-auto"></div>
+//         </div>
+//       </div>
+//     </div>
+//   `;
+
+//   document.body.insertAdjacentHTML("beforeend", modalHTML);
+//   modal = document.getElementById("studentDashboardModal");
+
+//   // Show modal
+//   modal.classList.remove("hidden");
+//   modal.classList.add("flex");
+
+//   // Close handler
+//   document.getElementById("closeDashboardBtn").addEventListener("click", () => {
+//     modal.remove();
+//   });
+
+//   // Refresh handler
+//   document.getElementById("refreshDashboardBtn").addEventListener("click", async () => {
+//     await this.refreshDashboardStats();
+//   });
+
+//   // Initial load
+//   await this.refreshDashboardStats();
+// }
+
+// // -----------------------------
+// // Refresh function
+// async refreshDashboardStats() {
+//   try {
+//     const res = await fetch(`${this.base_server}/get-student-stats`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ 
+//         institute: this.user.institute,
+//         role: this.user.role,
+//         student_id: this.user.id
+//       })
+//     });
+//     const data = await res.json();
+
+//     // Update DOM
+//     document.getElementById("dashboardPoints").innerText = data.points || 0;
+//     document.getElementById("dashboardLOC").innerText = data.total_lines || 0;
+//     document.getElementById("dashboardUnique").innerText = data.unique_submissions || 0;
+
+//     // Update leaderboard preview
+//     const lb = document.getElementById("leaderboardList");
+//     lb.innerHTML = "";
+//     if (data.leaderboard && data.leaderboard.length > 0) {
+//       data.leaderboard.forEach((item, index) => {
+//         const div = document.createElement("div");
+//         div.className = "flex justify-between bg-[#1e1e1e] p-2 rounded";
+//         div.innerHTML = `<span class="text-white text-sm">#${index+1} ${item.name}</span>
+//                          <span class="text-[#61dafb] text-sm">${item.points} pts</span>`;
+//         lb.appendChild(div);
+//       });
+//     }
+//   } catch (err) {
+//     console.error("Failed to refresh dashboard stats:", err);
+//   }
+// }
+
+
 async showDashboard() {
   // If modal already exists, just show it
   let modal = document.getElementById("studentDashboardModal");
@@ -3464,6 +3580,7 @@ async showDashboard() {
           <p class="text-white"><strong>Name:</strong> ${this.user.name}</p>
           <p class="text-white"><strong>Role:</strong> ${this.user.role}</p>
           <p class="text-white"><strong>ID:</strong> ${this.user.id}</p>
+          <p id="dashboardRank" class="text-white mt-1">Rank </p>
         </div>
 
         <!-- Stats Section -->
@@ -3484,8 +3601,11 @@ async showDashboard() {
 
         <!-- Leaderboard Preview -->
         <div class="mb-6">
-          <h3 class="text-[#61dafb] font-semibold mb-2">Leaderboard</h3>
-          <div id="leaderboardList" class="space-y-2 max-h-40 overflow-y-auto"></div>
+          <h3 class="text-[#61dafb] font-semibold mb-2">Leaderboard (Top 20)</h3>
+          <div id="leaderboardList" 
+          class="space-y-2 max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-[#1e1e1e] p-2 rounded">
+          </div>
+
         </div>
       </div>
     </div>
@@ -3512,42 +3632,180 @@ async showDashboard() {
   await this.refreshDashboardStats();
 }
 
-// -----------------------------
-// Refresh function
 async refreshDashboardStats() {
   try {
-    const res = await fetch(`${this.base_server}/get-student-stats`, {
+    const response = await fetch(`${this.base_server}/get-student-stats`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         institute: this.user.institute,
         role: this.user.role,
-        student_id: this.user.id
-      })
+        student_id: this.user.id,
+      }),
     });
-    const data = await res.json();
 
-    // Update DOM
-    document.getElementById("dashboardPoints").innerText = data.points || 0;
-    document.getElementById("dashboardLOC").innerText = data.total_lines || 0;
-    document.getElementById("dashboardUnique").innerText = data.unique_submissions || 0;
+    const data = await response.json();
 
-    // Update leaderboard preview
-    const lb = document.getElementById("leaderboardList");
-    lb.innerHTML = "";
-    if (data.leaderboard && data.leaderboard.length > 0) {
-      data.leaderboard.forEach((item, index) => {
-        const div = document.createElement("div");
-        div.className = "flex justify-between bg-[#1e1e1e] p-2 rounded";
-        div.innerHTML = `<span class="text-white text-sm">#${index+1} ${item.name}</span>
-                         <span class="text-[#61dafb] text-sm">${item.points} pts</span>`;
-        lb.appendChild(div);
+    if (data.error) {
+      console.error("Error fetching stats:", data.error);
+      return;
+    }
+
+    // Update main stats
+    document.getElementById("dashboardPoints").textContent = data.points || 0;
+    document.getElementById("dashboardLOC").textContent = data.total_lines || 0;
+    document.getElementById("dashboardUnique").textContent = data.unique_submissions || 0;
+    // document.getElementById("dashboardRank").textContent = `<strong>Rank: ${data.rank}</strong>`;
+    const rankEl = document.getElementById("dashboardRank");
+    rankEl.innerHTML = data.rank != null
+    ? `<strong class="text-lg font-bold text-[#61dafb]">Rank: ${data.rank}</strong>`
+    : `<strong class="text-lg font-bold text-[#61dafb]">Rank: N/A</strong>`;
+
+    console.log("Student stats API response:", data);
+    console.log("Personal rank:", data.rank);
+    console.log("Total students:", data.leaderboard?.total_students);
+
+
+    // Update personal rank and leaderboard if cache exists
+    if (data.leaderboard) {
+      const { top_students = [], total_students } = data.leaderboard;
+
+      // Use rank from student doc if available
+      const personal_rank = data.rank;
+
+      // document.getElementById("dashboardRank").textContent =
+      //   personal_rank != null
+      //     ? `Rank: ${personal_rank}${total_students ? ` / ${total_students}` : ""}`
+      //     : "Rank: N/A";
+
+      rankEl.innerHTML = data.rank != null
+    ? `<strong class="text-lg font-bold text-[#61dafb]">Rank: ${personal_rank}${total_students ? ` / ${total_students}` : ""}</strong>`
+    : `<strong class="text-lg font-bold text-[#61dafb]">Rank: N/A</strong>`;   
+
+      const leaderboardList = document.getElementById("leaderboardList");
+      leaderboardList.innerHTML = "";
+
+      top_students.forEach((s) => {
+        const entry = document.createElement("div");
+        entry.className = "flex justify-between bg-[#1e1e1e] p-2 rounded";
+        entry.innerHTML = `
+          <div>
+            <span class="text-white font-semibold">#${s.rank} ${s.name}</span>
+            <span class="text-gray-400 ml-1">(${s.student_id})</span>
+          </div>
+          <div class="text-[#61dafb]">
+            ${s.points} pts | ${s.total_lines} LOC | ${s.unique_submissions} subs
+          </div>
+        `;
+        leaderboardList.appendChild(entry);
       });
     }
+
   } catch (err) {
-    console.error("Failed to refresh dashboard stats:", err);
+    console.error("Failed to refresh stats:", err);
   }
 }
+
+
+
+// async refreshDashboardStats() {
+//   try {
+//     const response = await fetch(`${this.base_server}/get-student-stats`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({
+//         institute: this.user.institute,
+//         role: this.user.role,
+//         student_id: this.user.id,
+//       }),
+//     });
+//     const data = await response.json();
+
+//     if (data.error) {
+//       console.error("Error fetching stats:", data.error);
+//       return;
+//     }
+
+//     // Update stats
+//     document.getElementById("dashboardPoints").textContent = data.points || 0;
+//     document.getElementById("dashboardLOC").textContent = data.total_lines || 0;
+//     document.getElementById("dashboardUnique").textContent = data.unique_submissions || 0;
+
+//     // ✅ Update personal rank and leaderboard if available
+//     if (data.leaderboard) {
+//       const { top_students = [], total_students } = data.leaderboard;
+
+//       // Personal rank from student doc
+//       const personal_rank = data.rank || null;
+//       document.getElementById("dashboardRank").textContent =
+//         personal_rank ? `Rank: ${personal_rank} / ${total_students}` : "";
+
+//       const leaderboardList = document.getElementById("leaderboardList");
+//       leaderboardList.innerHTML = "";
+
+//       top_students.forEach((s) => {
+//         const entry = document.createElement("div");
+//         entry.className = "flex justify-between bg-[#1e1e1e] p-2 rounded";
+//         entry.innerHTML = `
+//           <span class="text-white">#${s.rank} ${s.name}</span>
+//           <span class="text-[#61dafb]">${s.points} pts | ${s.total_lines} LOC | ${s.unique_submissions} subs</span>
+//         `;
+//         leaderboardList.appendChild(entry);
+//       });
+//     }
+//   } catch (err) {
+//     console.error("Failed to refresh stats:", err);
+//   }
+// }
+
+
+// async refreshDashboardStats() {
+//   try {
+//     const response = await fetch(`${this.base_server}/get-student-stats`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({
+//         institute: this.user.institute,
+//         role: this.user.role,
+//         student_id: this.user.id,
+//       }),
+//     });
+//     const data = await response.json();
+
+//     if (data.error) {
+//       console.error("Error fetching stats:", data.error);
+//       return;
+//     }
+
+//     // Update stats
+//     document.getElementById("dashboardPoints").textContent = data.points || 0;
+//     document.getElementById("dashboardLOC").textContent = data.total_lines || 0;
+//     document.getElementById("dashboardUnique").textContent = data.unique_submissions || 0;
+
+//     // ✅ Update rank if leaderboard data exists
+//     if (data.leaderboard) {
+//       const { top_students = [], personal_rank, total_students } = data.leaderboard_cache;
+
+//       document.getElementById("dashboardRank").textContent = 
+//         personal_rank ? `Rank: ${personal_rank} / ${total_students}` : "";
+
+//       const leaderboardList = document.getElementById("leaderboardList");
+//       leaderboardList.innerHTML = "";
+
+//       top_students.forEach((s) => {
+//         const entry = document.createElement("div");
+//         entry.className = "flex justify-between bg-[#1e1e1e] p-2 rounded";
+//         entry.innerHTML = `
+//           <span class="text-white">#${s.rank} ${s.name}</span>
+//           <span class="text-[#61dafb]">${s.points} pts</span>
+//         `;
+//         leaderboardList.appendChild(entry);
+//       });
+//     }
+//   } catch (err) {
+//     console.error("Failed to refresh stats:", err);
+//   }
+// }
 
 
 
