@@ -51,11 +51,15 @@ class CodeEditorApp {
     role: '',
     institute: '',
     points:0,
+    subjects:[]
   };
   this.copilot=null;
   this.fetchedfaculty='';
   this.fetchedsubject='';
   this.fetchedclassid='';
+  this.selectedSubject=null;
+  this.selectedFaculty=null;
+  this.studentStats;
 
     this.loadFolderToSidebar = this.loadFolderToSidebar.bind(this);
 
@@ -105,8 +109,8 @@ class CodeEditorApp {
             const config = snapshot.data();
             // console.log("✅ Loaded remote config:", config);
 
-            this.base_server = config.server_api;
-            // this.base_server = config.test_api;
+            // this.base_server = config.server_api;
+            this.base_server = config.test_api;
             
             this.base_llm = config.llm_api;
             this.test_server=config.test_api;
@@ -2953,8 +2957,9 @@ showLoginForm(role) {
         this.user.id = role === "student" ? data.data.student_id : data.data.email;
         this.user.role = role;
        
-        this.showEditor();
-        this.showDashboard();
+        // this.showEditor();
+        // this.showDashboard();
+        this.showHomePage();
         this.showToast('✔ Login successful');
       } else {
         this.showToast(`❌ ${data?.message || 'Login failed'}`);
@@ -2965,6 +2970,1362 @@ showLoginForm(role) {
     }
   };
 }
+
+// async showHomePage() {
+//   const app = document.getElementById('app');
+//   app.classList.remove('hidden');
+
+//   // ensure we have a default subject selected (first one)
+//   const subjects = this.user.subjects || ['Math', 'Science', 'English']; // example subjects
+//   this.selectedSubject = this.selectedSubject || subjects[0];
+
+//   const stats = this.studentStats?.[this.selectedSubject] || {
+//     assignments: { submitted: 0, pending: 0 },
+//     practicals: { submitted: 0, pending: 0 },
+//     quizzes: { submitted: 0, pending: 0 },
+//     classes: 0,
+//   };
+
+//   app.innerHTML = `
+//     <div class="h-full w-full flex flex-col bg-[#1e1e1e] text-gray-100 font-sans">
+//       <!-- Topbar -->
+//       <div id="topbar" class="flex items-center justify-between h-10 px-4 bg-[#2d2d2d] border-b border-[#3c3c3c]">
+//         <div class="flex items-center space-x-3">
+//           <span class="text-lg font-bold text-teal-400">Kodin</span>
+//           <span class="text-gray-400 text-sm">Student Home</span>
+//         </div>
+//         <div class="flex items-center space-x-3">
+//           <span class="text-sm text-gray-300">${this.user.name || 'Student'}</span>
+//           <button id="logoutBtn"
+//             class="text-xs bg-[#3c3c3c] hover:bg-[#555] px-3 py-1 rounded text-gray-200">Logout</button>
+//         </div>
+//       </div>
+
+//       <!-- Home Page Content -->
+//       <div class="flex-1 overflow-y-auto p-8">
+//         <h1 class="text-3xl font-bold mb-6 text-white">Welcome, ${this.user.name || 'Student'} 👋</h1>
+
+//         <!-- General Info -->
+//         <div class="bg-[#2d2d2d] rounded-lg p-6 mb-8 border border-[#3c3c3c] shadow">
+//           <p><strong>Institute:</strong> ${this.user.institute || 'N/A'}</p>
+//           <p><strong>Role:</strong> ${this.user.role}</p>
+//           <p><strong>ID:</strong> ${this.user.id}</p>
+//         </div>
+
+//         <!-- Subject Selector -->
+//         <div class="flex justify-between items-center mb-4">
+//           <h2 class="text-xl font-semibold text-white">Your Progress</h2>
+//           <div class="flex items-center space-x-2">
+//             <label for="subjectSelect" class="text-sm text-gray-300">Select Subject:</label>
+//             <select id="subjectSelect" 
+//               class="bg-[#2d2d2d] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-teal-500">
+//               ${subjects.map(sub => `
+//                 <option value="${sub}" ${sub === this.selectedSubject ? 'selected' : ''}>
+//                   ${sub}
+//                 </option>
+//               `).join('')}
+//             </select>
+//           </div>
+//         </div>
+
+//         <!-- Quick Stats Grid -->
+//         <div id="homeStatsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+//           ${this.homeCard('🧾', 'Assignments', stats.assignments.submitted, stats.assignments.pending)}
+//           ${this.homeCard('🧪', 'Practicals', stats.practicals.submitted, stats.practicals.pending)}
+//           ${this.homeCard('🧠', 'Quizzes', stats.quizzes.submitted, stats.quizzes.pending)}
+//           ${this.homeCard('🏫', 'Classes Joined', stats.classes, 0)}
+//         </div>
+
+//         <!-- Buttons Row -->
+//         <div class="flex flex-wrap justify-center gap-6">
+//           <button id="goToEditorBtn"
+//             class="px-8 py-3 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-lg font-semibold text-black shadow-lg">
+//             Go to Editor
+//           </button>
+
+//           <button id="viewDashboardBtn"
+//             class="px-8 py-3 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-semibold text-white">
+//             View Detailed Dashboard
+//           </button>
+
+//           <button id="refreshHomeBtn"
+//             class="px-8 py-3 rounded-full bg-[#3c3c3c] hover:bg-[#555] text-lg font-semibold text-white">
+//             Refresh
+//           </button>
+//         </div>
+//       </div>
+
+//       <!-- Bottom Bar -->
+//       <div id="bottombar" class="h-6 bg-gradient-to-r from-green-400 via-green-500 to-green-600 text-gray-100 flex items-center justify-between px-4 border-t border-green-700 text-xs">
+//         <span>Role: Student</span>
+//         <span>${this.user.institute || ''}</span>
+//       </div>
+//     </div>
+//   `;
+
+//   // Button bindings
+//   document.getElementById('logoutBtn').onclick = () => {
+//     this.user = {};
+//     this.showWelcomePage();
+//   };
+
+//   document.getElementById('goToEditorBtn').onclick = () => {
+//     this.showEditor();
+//     this.showToast('🧑‍💻 Opening editor...');
+//   };
+
+//   document.getElementById('viewDashboardBtn').onclick = () => this.showDashboard();
+
+//   document.getElementById('refreshHomeBtn').onclick = () => this.fetchStudentStats();
+
+//   // Subject change listener
+//   document.getElementById('subjectSelect').addEventListener('change', async (e) => {
+//     this.selectedSubject = e.target.value;
+//     await this.updateHomeStats();
+//   });
+// }
+
+
+// async showHomePage() {
+//   const app = document.getElementById('app');
+//   app.classList.remove('hidden');
+
+//   // ensure we have a default subject selected (first one)
+//   const subjects = this.user.subjects || ['Math', 'Science', 'English']; // fallback subjects
+//   this.selectedSubject = this.selectedSubject || subjects[0];
+
+//   const stats = this.studentStats?.[this.selectedSubject] || {
+//     assignments: { submitted: 0, pending: 0 },
+//     practicals: { submitted: 0, pending: 0 },
+//     quizzes: { submitted: 0, pending: 0 },
+//     classes: 0,
+//   };
+
+//   app.innerHTML = `
+//     <div class="h-full w-full flex flex-col bg-[#1e1e1e] text-gray-100 font-sans">
+//       <!-- Topbar -->
+//       <div id="topbar" class="flex items-center justify-between h-10 px-4 bg-[#2d2d2d] border-b border-[#3c3c3c]">
+//         <div class="flex items-center space-x-3">
+//           <span class="text-lg font-bold text-teal-400">Kodin</span>
+//           <span class="text-gray-400 text-sm">Student Home</span>
+//         </div>
+//         <div class="flex items-center space-x-3">
+//           <span class="text-sm text-gray-300">${this.user.name || 'Student'}</span>
+//           <button id="logoutBtn"
+//             class="text-xs bg-[#3c3c3c] hover:bg-[#555] px-3 py-1 rounded text-gray-200">Logout</button>
+//         </div>
+//       </div>
+
+//       <!-- Home Page Content -->
+//       <div class="flex-1 overflow-y-auto p-8">
+//         <h1 class="text-3xl font-bold mb-6 text-white">Welcome, ${this.user.name || 'Student'} 👋</h1>
+
+//         <!-- General Info -->
+//         <div class="bg-[#2d2d2d] rounded-lg p-6 mb-6 border border-[#3c3c3c] shadow">
+//           <p><strong>Institute:</strong> ${this.user.institute || 'N/A'}</p>
+//           <p><strong>Role:</strong> ${this.user.role}</p>
+//           <p><strong>ID:</strong> ${this.user.id}</p>
+//         </div>
+
+//         <!-- Personal Performance Summary -->
+//         <div class="bg-[#2d2d2d] rounded-lg p-4 mb-8 border border-[#3c3c3c] shadow">
+//           <h2 class="text-lg font-semibold mb-3 text-teal-400">Performance Summary</h2>
+//           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+//             <div class="p-3 bg-[#1e1e1e] rounded-lg">
+//               <p class="text-gray-400 text-sm">Rank</p>
+//               <p id="homeRank" class="text-white text-xl font-semibold">--</p>
+//             </div>
+//             <div class="p-3 bg-[#1e1e1e] rounded-lg">
+//               <p class="text-gray-400 text-sm">Points</p>
+//               <p id="homePoints" class="text-white text-xl font-semibold">--</p>
+//             </div>
+//             <div class="p-3 bg-[#1e1e1e] rounded-lg">
+//               <p class="text-gray-400 text-sm">Lines of Code</p>
+//               <p id="homeLOC" class="text-white text-xl font-semibold">--</p>
+//             </div>
+//             <div class="p-3 bg-[#1e1e1e] rounded-lg">
+//               <p class="text-gray-400 text-sm">Unique Submissions</p>
+//               <p id="homeUnique" class="text-white text-xl font-semibold">--</p>
+//             </div>
+//           </div>
+//         </div>
+
+//         <!-- Subject Selector -->
+//         <div class="flex justify-between items-center mb-4">
+//           <h2 class="text-xl font-semibold text-white">Your Progress</h2>
+//           <div class="flex items-center space-x-2">
+//             <label for="subjectSelect" class="text-sm text-gray-300">Select Subject:</label>
+//             <select id="subjectSelect" 
+//               class="bg-[#2d2d2d] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-teal-500">
+//               ${subjects.map(sub => `
+//                 <option value="${sub}" ${sub === this.selectedSubject ? 'selected' : ''}>
+//                   ${sub}
+//                 </option>
+//               `).join('')}
+//             </select>
+//           </div>
+//         </div>
+
+//         <!-- Quick Stats Grid -->
+//         <div id="homeStatsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+//           ${this.homeCard('🧾', 'Assignments', stats.assignments.submitted, stats.assignments.pending)}
+//           ${this.homeCard('🧪', 'Practicals', stats.practicals.submitted, stats.practicals.pending)}
+//           ${this.homeCard('🧠', 'Quizzes', stats.quizzes.submitted, stats.quizzes.pending)}
+//           ${this.homeCard('🏫', 'Classes Joined', stats.classes, 0)}
+//         </div>
+
+//         <!-- Buttons Row -->
+//         <div class="flex flex-wrap justify-center gap-6">
+//           <button id="goToEditorBtn"
+//             class="px-8 py-3 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-lg font-semibold text-black shadow-lg">
+//             Go to Editor
+//           </button>
+
+//           <button id="viewDashboardBtn"
+//             class="px-8 py-3 rounded-full bg-gray-700 hover:bg-gray-600 text-lg font-semibold text-white">
+//             View Detailed Dashboard
+//           </button>
+
+//           <button id="refreshHomeBtn"
+//             class="px-8 py-3 rounded-full bg-[#3c3c3c] hover:bg-[#555] text-lg font-semibold text-white">
+//             Refresh
+//           </button>
+//         </div>
+//       </div>
+
+//       <!-- Bottom Bar -->
+//       <div id="bottombar" class="h-6 bg-gradient-to-r from-green-400 via-green-500 to-green-600 text-gray-100 flex items-center justify-between px-4 border-t border-green-700 text-xs">
+//         <span>Role: Student</span>
+//         <span>${this.user.institute || ''}</span>
+//       </div>
+//     </div>
+//   `;
+
+//   // Button bindings
+//   document.getElementById('logoutBtn').onclick = () => {
+//     this.user = {};
+//     this.showWelcomePage();
+//   };
+
+//   document.getElementById('goToEditorBtn').onclick = () => {
+//     this.showEditor();
+//     this.showToast('🧑‍💻 Opening editor...');
+//   };
+
+//   document.getElementById('viewDashboardBtn').onclick = () => this.showDashboard();
+
+//   document.getElementById('refreshHomeBtn').onclick = async () => {
+//     await this.fetchStudentStats();
+//     await this.updateHomeStatsAndProfile();
+//   };
+
+//   // Subject change listener
+//   document.getElementById('subjectSelect').addEventListener('change', async (e) => {
+//     this.selectedSubject = e.target.value;
+//     await this.updateHomeStatsAndProfile(); // refresh top summary
+//     await this.updateHomeStats();           // refresh subject-specific cards
+//   });
+
+//   // Fetch initial performance and stats
+//   await this.updateHomeStatsAndProfile();
+// }
+
+// async showHomePage() {
+//   const app = document.getElementById('app');
+//   app.classList.remove('hidden');
+
+//   // ensure we have a default subject selected (first one)
+//   const subjects = this.user.subjects || ['Math', 'Science', 'English']; // fallback subjects
+//   this.selectedSubject = this.selectedSubject || subjects[0];
+
+//   const stats = this.studentStats?.[this.selectedSubject] || {
+//     assignments: { submitted: 0, pending: 0 },
+//     practicals: { submitted: 0, pending: 0 },
+//     quizzes: { submitted: 0, pending: 0 },
+//     classes: 0,
+//   };
+
+//   app.innerHTML = `
+//     <div class="h-full w-full flex flex-col bg-[#1e1e1e] text-gray-100 font-sans">
+//       <!-- Topbar -->
+//       <div id="topbar" class="flex items-center justify-between h-10 px-4 bg-[#2d2d2d] border-b border-[#3c3c3c]">
+//         <div class="flex items-center space-x-3">
+//           <span class="text-lg font-bold text-teal-400">Kodin</span>
+//           <span class="text-gray-400 text-sm">Student Home</span>
+//         </div>
+//         <div class="flex items-center space-x-3">
+//           <span class="text-sm text-gray-300">${this.user.name || 'Student'}</span>
+//           <button id="logoutBtn"
+//             class="text-xs bg-[#3c3c3c] hover:bg-[#555] px-3 py-1 rounded text-gray-200">Logout</button>
+//         </div>
+//       </div>
+
+//       <!-- Home Page Content -->
+//       <div class="flex-1 overflow-y-auto p-6">
+//         <h1 class="text-2xl font-bold mb-5 text-white">Welcome, ${this.user.name || 'Student'} 👋</h1>
+
+//         <!-- Combined Info + Performance -->
+//         <div class="bg-[#2d2d2d] rounded-lg p-5 mb-6 border border-[#3c3c3c] shadow">
+//           <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Institute</p>
+//               <p class="text-white text-sm font-semibold">${this.user.institute || 'N/A'}</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Role</p>
+//               <p class="text-white text-sm font-semibold">${this.user.role}</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">ID</p>
+//               <p class="text-white text-sm font-semibold">${this.user.id}</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Rank</p>
+//               <p id="homeRank" class="text-white text-sm font-semibold">--</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Points</p>
+//               <p id="homePoints" class="text-white text-sm font-semibold">--</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Unique Subs</p>
+//               <p id="homeUnique" class="text-white text-sm font-semibold">--</p>
+//             </div>
+//           </div>
+//         </div>
+
+//         <!-- Subject Selector -->
+//         <div class="flex justify-between items-center mb-3">
+//           <h2 class="text-lg font-semibold text-white">Your Progress</h2>
+//           <div class="flex items-center space-x-2">
+//             <label for="subjectSelect" class="text-sm text-gray-300">Subject:</label>
+//             <select id="subjectSelect"
+//               class="bg-[#2d2d2d] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-teal-500">
+//               ${subjects.map(sub => `
+//                 <option value="${sub}" ${sub === this.selectedSubject ? 'selected' : ''}>
+//                   ${sub}
+//                 </option>
+//               `).join('')}
+//             </select>
+//           </div>
+//         </div>
+
+//         <!-- Quick Stats Grid -->
+//         <div id="homeStatsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+//           ${this.homeCard('🧾', 'Assignments', stats.assignments.submitted, stats.assignments.pending)}
+//           ${this.homeCard('🧪', 'Practicals', stats.practicals.submitted, stats.practicals.pending)}
+//           ${this.homeCard('🧠', 'Quizzes', stats.quizzes.submitted, stats.quizzes.pending)}
+//           ${this.homeCard('🏫', 'Classes Joined', stats.classes, 0)}
+//         </div>
+
+//         <!-- Buttons Row -->
+//         <div class="flex flex-wrap justify-center gap-4">
+//           <button id="goToEditorBtn"
+//             class="px-6 py-2 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-base font-semibold text-black shadow">
+//             Go to Editor
+//           </button>
+
+//           <button id="viewDashboardBtn"
+//             class="px-6 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-base font-semibold text-white">
+//             View Dashboard
+//           </button>
+
+//           <button id="refreshHomeBtn"
+//             class="px-6 py-2 rounded-full bg-[#3c3c3c] hover:bg-[#555] text-base font-semibold text-white">
+//             Refresh
+//           </button>
+//         </div>
+//       </div>
+
+//       <!-- Bottom Bar -->
+//       <div id="bottombar" class="h-6 bg-gradient-to-r from-green-400 via-green-500 to-green-600 text-gray-100 flex items-center justify-between px-4 border-t border-green-700 text-xs">
+//         <span>Role: ${this.user.role}</span>
+//         <span>${this.user.institute || ''}</span>
+//       </div>
+//     </div>
+//   `;
+
+//   // Button bindings
+//   document.getElementById('logoutBtn').onclick = () => {
+//     this.user = {};
+//     this.showWelcomePage();
+//   };
+
+//   document.getElementById('goToEditorBtn').onclick = () => {
+//     this.showEditor();
+//     this.showToast('🧑‍💻 Opening editor...');
+//   };
+
+//   document.getElementById('viewDashboardBtn').onclick = () => this.showDashboard();
+
+//   document.getElementById('refreshHomeBtn').onclick = async () => {
+//     await this.fetchStudentStats();
+//     await this.updateHomeStatsAndProfile();
+//   };
+
+//   // Subject change listener
+//   document.getElementById('subjectSelect').addEventListener('change', async (e) => {
+//     this.selectedSubject = e.target.value;
+//     await this.updateHomeStatsAndProfile();
+//     await this.updateHomeStats();
+//   });
+
+//   // Fetch initial stats and profile
+//   await this.updateHomeStatsAndProfile();
+// }
+
+// async showHomePage() {
+//   const app = document.getElementById('app');
+//   app.classList.remove('hidden');
+
+//   const subjects = this.user.subjects || ['Math', 'Science', 'English'];
+//   this.selectedSubject = this.selectedSubject || subjects[0];
+
+//   const stats = this.studentStats?.[this.selectedSubject] || {
+//     assignments: { submitted: 0, pending: 0 },
+//     practicals: { submitted: 0, pending: 0 },
+//     quizzes: { submitted: 0, pending: 0 },
+//     classes: 0,
+//   };
+
+//   app.innerHTML = `
+//     <div class="h-full w-full flex flex-col bg-[#1e1e1e] text-gray-100 font-sans">
+//       <!-- Topbar -->
+//       <div id="topbar" class="flex items-center justify-between h-10 px-4 bg-[#2d2d2d] border-b border-[#3c3c3c]">
+//         <div class="flex items-center space-x-3">
+//           <span class="text-lg font-bold text-teal-400">Kodin</span>
+//           <span class="text-gray-400 text-sm">Student Home</span>
+//         </div>
+//         <div class="flex items-center space-x-3">
+//           <span class="text-sm text-gray-300">${this.user.name || 'Student'}</span>
+//           <button id="logoutBtn"
+//             class="text-xs bg-[#3c3c3c] hover:bg-[#555] px-3 py-1 rounded text-gray-200">Logout</button>
+//         </div>
+//       </div>
+
+//       <!-- Home Page Content -->
+//       <div class="flex-1 overflow-y-auto p-6">
+//         <h1 class="text-2xl font-bold mb-5 text-white">Welcome, ${this.user.name || 'Student'} 👋</h1>
+
+//         <!-- Student Info + Performance Summary -->
+//         <div class="bg-[#2d2d2d] rounded-lg p-5 mb-6 border border-[#3c3c3c] shadow">
+//           <div class="grid grid-cols-2 md:grid-cols-6 gap-5 text-center">
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Institute</p>
+//               <p class="text-white text-lg font-semibold truncate">${this.user.institute || 'N/A'}</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Student ID</p>
+//               <p class="text-white text-lg font-semibold">${this.user.id}</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Rank</p>
+//               <p id="homeRank" class="text-white text-2xl font-bold">--</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Points</p>
+//               <p id="homePoints" class="text-white text-2xl font-bold">--</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Lines of Code</p>
+//               <p id="homeLOC" class="text-white text-2xl font-bold">--</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Unique Subs</p>
+//               <p id="homeUnique" class="text-white text-2xl font-bold">--</p>
+//             </div>
+//           </div>
+//         </div>
+
+//         <!-- Subject Selector -->
+//         <div class="flex justify-between items-center mb-3">
+//           <h2 class="text-lg font-semibold text-white">Your Progress</h2>
+//           <div class="flex items-center space-x-2">
+//             <label for="subjectSelect" class="text-sm text-gray-300">Subject:</label>
+//             <select id="subjectSelect"
+//               class="bg-[#2d2d2d] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-teal-500">
+//               ${subjects.map(sub => `
+//                 <option value="${sub}" ${sub === this.selectedSubject ? 'selected' : ''}>
+//                   ${sub}
+//                 </option>
+//               `).join('')}
+//             </select>
+//           </div>
+//         </div>
+
+//         <!-- Quick Stats Grid -->
+//         <div id="homeStatsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+//           ${this.homeCard('🧾', 'Assignments', stats.assignments.submitted, stats.assignments.pending)}
+//           ${this.homeCard('🧪', 'Practicals', stats.practicals.submitted, stats.practicals.pending)}
+//           ${this.homeCard('🧠', 'Quizzes', stats.quizzes.submitted, stats.quizzes.pending)}
+//           ${this.homeCard('🏫', 'Classes Joined', stats.classes, 0)}
+//         </div>
+
+//         <!-- Buttons Row -->
+//         <div class="flex flex-wrap justify-center gap-4">
+//           <button id="goToEditorBtn"
+//             class="px-6 py-2 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-base font-semibold text-black shadow">
+//             Go to Editor
+//           </button>
+
+//           <button id="viewDashboardBtn"
+//             class="px-6 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-base font-semibold text-white">
+//             View Dashboard
+//           </button>
+
+//           <button id="refreshHomeBtn"
+//             class="px-6 py-2 rounded-full bg-[#3c3c3c] hover:bg-[#555] text-base font-semibold text-white">
+//             Refresh
+//           </button>
+//         </div>
+//       </div>
+
+//       <!-- Bottom Bar -->
+//       <div id="bottombar" class="h-6 bg-gradient-to-r from-green-400 via-green-500 to-green-600 text-gray-100 flex items-center justify-between px-4 border-t border-green-700 text-xs">
+//         <span>Student Portal</span>
+//         <span>${this.user.institute || ''}</span>
+//       </div>
+//     </div>
+//   `;
+
+//   // Button bindings
+//   document.getElementById('logoutBtn').onclick = () => {
+//     this.user = {};
+//     this.showWelcomePage();
+//   };
+
+//   document.getElementById('goToEditorBtn').onclick = () => {
+//     this.showEditor();
+//     this.showToast('🧑‍💻 Opening editor...');
+//   };
+
+//   document.getElementById('viewDashboardBtn').onclick = () => this.showDashboard();
+
+//   document.getElementById('refreshHomeBtn').onclick = async () => {
+//     await this.fetchStudentStats();
+//     await this.updateHomeStatsAndProfile();
+//   };
+
+//   // Subject change listener
+//   document.getElementById('subjectSelect').addEventListener('change', async (e) => {
+//     this.selectedSubject = e.target.value;
+//     await this.updateHomeStatsAndProfile();
+//     await this.updateHomeStats();
+//   });
+
+//   // Initial stats and profile fetch
+//   await this.updateHomeStatsAndProfile();
+// }
+
+
+// async showHomePage() {
+//   const app = document.getElementById('app');
+//   app.classList.remove('hidden');
+
+//   const subjects = this.user.subjects || ['Math', 'Science', 'English'];
+//   this.selectedSubject = this.selectedSubject || subjects[0];
+
+//   const stats = this.studentStats?.[this.selectedSubject] || {
+//     assignments: { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//     practicals: { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//     quizzes: { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//     classes: 0,
+//   };
+
+//   app.innerHTML = `
+//     <div class="h-full w-full flex flex-col bg-[#1e1e1e] text-gray-100 font-sans">
+//       <!-- Topbar -->
+//       <div id="topbar" class="flex items-center justify-between h-10 px-4 bg-[#2d2d2d] border-b border-[#3c3c3c]">
+//         <div class="flex items-center space-x-3">
+//           <span class="text-lg font-bold text-teal-400">Kodin</span>
+//           <span class="text-gray-400 text-sm">Student Home</span>
+//         </div>
+//         <div class="flex items-center space-x-3">
+//           <span class="text-sm text-gray-300">${this.user.name || 'Student'}</span>
+//           <button id="logoutBtn"
+//             class="text-xs bg-[#3c3c3c] hover:bg-[#555] px-3 py-1 rounded text-gray-200">Logout</button>
+//         </div>
+//       </div>
+
+//       <!-- Home Page Content -->
+//       <div class="flex-1 overflow-y-auto p-6">
+//         <h1 class="text-2xl font-bold mb-5 text-white">Welcome, ${this.user.name || 'Student'} 👋</h1>
+
+//         <!-- Student Info + Performance Summary -->
+//         <div class="bg-[#2d2d2d] rounded-lg p-5 mb-6 border border-[#3c3c3c] shadow">
+//           <div class="grid grid-cols-2 md:grid-cols-6 gap-5 text-center">
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Institute</p>
+//               <p class="text-white text-lg font-semibold truncate">${this.user.institute || 'N/A'}</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Student ID</p>
+//               <p class="text-white text-lg font-semibold">${this.user.id}</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Rank</p>
+//               <p id="homeRank" class="text-white text-2xl font-bold">--</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Points</p>
+//               <p id="homePoints" class="text-white text-2xl font-bold">--</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Lines of Code</p>
+//               <p id="homeLOC" class="text-white text-2xl font-bold">--</p>
+//             </div>
+//             <div class="p-4 bg-[#1e1e1e] rounded-xl shadow-inner">
+//               <p class="text-gray-400 text-sm mb-1">Unique Subs</p>
+//               <p id="homeUnique" class="text-white text-2xl font-bold">--</p>
+//             </div>
+//           </div>
+//         </div>
+
+//         <!-- Subject Selector -->
+//         <div class="flex justify-between items-center mb-3">
+//           <h2 class="text-lg font-semibold text-white">Your Progress</h2>
+//           <div class="flex items-center space-x-2">
+//             <label for="subjectSelect" class="text-sm text-gray-300">Subject:</label>
+//             <select id="subjectSelect"
+//               class="bg-[#2d2d2d] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-teal-500">
+//               ${subjects.map(sub => `
+//                 <option value="${sub}" ${sub === this.selectedSubject ? 'selected' : ''}>
+//                   ${sub}
+//                 </option>
+//               `).join('')}
+//             </select>
+//           </div>
+//         </div>
+
+//         <!-- Quick Stats Grid -->
+//         <div id="homeStatsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+//           ${this.homeCard('🧾', 'Assignments', stats.assignments.submitted, stats.assignments.pending, 'assignments')}
+//           ${this.homeCard('🧪', 'Practicals', stats.practicals.submitted, stats.practicals.pending, 'practicals')}
+//           ${this.homeCard('🧠', 'Quizzes', stats.quizzes.submitted, stats.quizzes.pending, 'quizzes')}
+//           ${this.homeCard('🏫', 'Classes Joined', stats.classes, 0, 'classes')}
+//         </div>
+
+//         <!-- Buttons Row -->
+//         <div class="flex flex-wrap justify-center gap-4">
+//           <button id="goToEditorBtn"
+//             class="px-6 py-2 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-base font-semibold text-black shadow">
+//             Go to Editor
+//           </button>
+
+//           <button id="viewDashboardBtn"
+//             class="px-6 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-base font-semibold text-white">
+//             View Dashboard
+//           </button>
+
+//           <button id="refreshHomeBtn"
+//             class="px-6 py-2 rounded-full bg-[#3c3c3c] hover:bg-[#555] text-base font-semibold text-white">
+//             Refresh
+//           </button>
+//         </div>
+//       </div>
+
+//       <!-- Bottom Bar -->
+//       <div id="bottombar" class="h-6 bg-gradient-to-r from-green-400 via-green-500 to-green-600 text-gray-100 flex items-center justify-between px-4 border-t border-green-700 text-xs">
+//         <span>Student Portal</span>
+//         <span>${this.user.institute || ''}</span>
+//       </div>
+
+//       <!-- Modal Container -->
+//       <div id="taskModal" class="fixed inset-0 hidden bg-black bg-opacity-70 flex items-center justify-center z-50">
+//         <div class="bg-[#2d2d2d] rounded-xl w-11/12 md:w-1/2 p-5 shadow-lg relative">
+//           <h2 id="modalTitle" class="text-xl font-bold mb-3 text-white">Tasks</h2>
+//           <select id="taskTypeSelect" class="absolute top-5 right-5 bg-[#1e1e1e] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1 focus:outline-none">
+//             <option value="submitted">Submitted</option>
+//             <option value="pending">Pending</option>
+//           </select>
+//           <div id="taskList" class="mt-5 space-y-2 max-h-64 overflow-y-auto"></div>
+//           <button id="closeModalBtn" class="absolute bottom-3 right-5 px-4 py-1 bg-teal-600 hover:bg-teal-500 rounded text-black font-semibold">Close</button>
+//         </div>
+//       </div>
+//     </div>
+//   `;
+
+//   // 🔹 Bind Buttons
+//   document.getElementById('logoutBtn').onclick = () => { this.user = {}; this.showWelcomePage(); };
+//   document.getElementById('goToEditorBtn').onclick = () => { this.showEditor(); this.showToast('🧑‍💻 Opening editor...'); };
+//   document.getElementById('viewDashboardBtn').onclick = () => this.showDashboard();
+//   document.getElementById('refreshHomeBtn').onclick = async () => { await this.fetchStudentStats(); await this.updateHomeStatsAndProfile(); };
+
+//   // 🔹 Subject selector listener
+//   document.getElementById('subjectSelect').addEventListener('change', async (e) => {
+//     this.selectedSubject = e.target.value;
+//     await this.updateHomeStatsAndProfile();
+//     await this.updateHomeStats();
+//   });
+
+//   // 🔹 Modal logic
+//   const modal = document.getElementById('taskModal');
+//   const modalTitle = document.getElementById('modalTitle');
+//   const taskList = document.getElementById('taskList');
+//   const taskTypeSelect = document.getElementById('taskTypeSelect');
+//   const closeModalBtn = document.getElementById('closeModalBtn');
+//   closeModalBtn.onclick = () => (modal.classList.add('hidden'));
+
+//   // 🔹 Card Clicks
+//   ['assignments', 'practicals', 'quizzes'].forEach(type => {
+//     document.getElementById(`homeCard-${type}`)?.addEventListener('click', () => {
+//       this.showTaskModal(type, modal, modalTitle, taskList, taskTypeSelect);
+//     });
+//   });
+
+//   // Initial stats fetch
+//   await this.updateHomeStatsAndProfile();
+// }
+
+// // 🔹 Card Helper
+// homeCard(icon, label, submitted, pending, id) {
+//   return `
+//     <div id="homeCard-${id}" class="cursor-pointer p-6 bg-[#2d2d2d] hover:bg-[#3c3c3c] rounded-xl transition transform hover:scale-105 text-center shadow">
+//       <p class="text-3xl mb-2">${icon}</p>
+//       <h3 class="text-lg font-semibold mb-2 text-white">${label}</h3>
+//       <p class="text-sm text-gray-400">Submitted: <span class="text-teal-400 font-bold">${submitted}</span></p>
+//       ${pending !== undefined ? `<p class="text-sm text-gray-400">Pending: <span class="text-red-400 font-bold">${pending}</span></p>` : ''}
+//     </div>
+//   `;
+// }
+
+// // 🔹 Modal Display Logic
+// showTaskModal(type, modal, modalTitle, taskList, taskTypeSelect) {
+//   modal.classList.remove('hidden');
+//   const subject = this.selectedSubject;
+//   modalTitle.textContent = `${type.charAt(0).toUpperCase() + type.slice(1)} - ${subject}`;
+  
+//   const renderTasks = () => {
+//     const mode = taskTypeSelect.value;
+//     const tasks = this.studentStats?.[subject]?.[type]?.list?.[mode] || [];
+//     taskList.innerHTML = tasks.length
+//       ? tasks.map(t => `<div class="p-3 bg-[#1e1e1e] rounded-md border border-[#3c3c3c]">${t}</div>`).join('')
+//       : `<p class="text-gray-400 text-center">No ${mode} tasks found.</p>`;
+//   };
+
+//   renderTasks();
+//   taskTypeSelect.onchange = renderTasks;
+// }
+
+
+// // -------------------- showHomePage --------------------
+// async showHomePage() {
+//   const app = document.getElementById('app');
+//   app.classList.remove('hidden');
+
+//   const res = await fetch(`${this.base_server}/get-approved-subjects?college=${this.user.institute}&student_id=${this.user.id}`);
+//     const data = await res.json();
+
+//     this.user.subjects = data.approved_subjects || [];
+//     // this.selectedSubject = this.user.subjects[0] || null;
+//     console.log("user subjects:",this.user.subjects);
+
+//   const subjects = this.user.subjects.map(s => s.subject) || [];
+
+//   this.selectedSubject = subjects[0]||"-";
+
+//   const stats = this.studentStats?.[this.selectedSubject] || {
+//     assignments: { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//     practicals:  { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//     quizzes:     { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//     classes: 0,
+//   };
+
+//   app.innerHTML = `
+//     <div class="h-full w-full flex flex-col bg-[#1e1e1e] text-gray-100 font-sans">
+//       <!-- Topbar -->
+//       <div id="topbar" class="flex items-center justify-between h-10 px-4 bg-[#2d2d2d] border-b border-[#3c3c3c]">
+//         <div class="flex items-center space-x-3">
+//           <span class="text-lg font-bold text-teal-400">Kodin</span>
+//           <span class="text-gray-400 text-sm">Student Home</span>
+//         </div>
+//         <div class="flex items-center space-x-3">
+//           <span class="text-sm text-gray-300">${this.user.name || 'Student'}</span>
+//           <button id="logoutBtn" class="text-xs bg-[#3c3c3c] hover:bg-[#555] px-3 py-1 rounded text-gray-200">Logout</button>
+//         </div>
+//       </div>
+
+//       <!-- Home Page Content -->
+//       <div class="flex-1 overflow-y-auto p-6">
+//         <h1 class="text-2xl font-bold mb-5 text-white">Welcome, ${this.user.name || 'Student'} 👋</h1>
+
+//         <!-- Combined Info + Performance -->
+//         <div class="bg-[#2d2d2d] rounded-lg p-5 mb-6 border border-[#3c3c3c] shadow">
+//           <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Institute</p>
+//               <p class="text-white text-sm font-semibold">${this.user.institute || 'N/A'}</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Student ID</p>
+//               <p class="text-white text-sm font-semibold">${this.user.id}</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Rank</p>
+//               <p id="homeRank" class="text-white text-sm font-semibold">--</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Points</p>
+//               <p id="homePoints" class="text-white text-sm font-semibold">--</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Lines of Code</p>
+//               <p id="homeLOC" class="text-white text-sm font-semibold">--</p>
+//             </div>
+//             <div class="p-2 bg-[#1e1e1e] rounded">
+//               <p class="text-gray-400 text-xs">Unique Subs</p>
+//               <p id="homeUnique" class="text-white text-sm font-semibold">--</p>
+//             </div>
+//           </div>
+//         </div>
+
+//         <!-- Subject Selector -->
+//         <div class="flex justify-between items-center mb-3">
+//           <h2 class="text-lg font-semibold text-white">Your Progress</h2>
+//           <div class="flex items-center space-x-2">
+//             <label for="subjectSelect" class="text-sm text-gray-300">Subject:</label>
+//             <select id="subjectSelect" class="bg-[#2d2d2d] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-teal-500">
+//               ${subjects.map(sub => `<option value="${sub}" ${sub === this.selectedSubject ? 'selected' : ''}>${sub}</option>`).join('')}
+//             </select>
+//           </div>
+//         </div>
+
+//         <!-- Quick Stats Grid -->
+//         <div id="homeStatsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+//           ${this.homeCard('🧾','Assignments', stats.assignments.submitted, stats.assignments.pending, 'assignments')}
+//           ${this.homeCard('🧪','Practicals',  stats.practicals.submitted,  stats.practicals.pending,  'practicals')}
+//           ${this.homeCard('🧠','Quizzes',     stats.quizzes.submitted,     stats.quizzes.pending,     'quizzes')}
+//           ${this.homeCard('🏫','Classes Joined', stats.classes, 0, 'classes')}
+//         </div>
+
+//         <!-- Buttons Row -->
+//         <div class="flex flex-wrap justify-center gap-4">
+//           <button id="goToEditorBtn" class="px-6 py-2 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 text-base font-semibold text-black shadow">Go to Editor</button>
+//           <button id="viewDashboardBtn" class="px-6 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-base font-semibold text-white">View Dashboard</button>
+//           <button id="refreshHomeBtn" class="px-6 py-2 rounded-full bg-[#3c3c3c] hover:bg-[#555] text-base font-semibold text-white">Refresh</button>
+//         </div>
+//       </div>
+
+//       <!-- Bottom Bar -->
+//       <div id="bottombar" class="h-6 bg-gradient-to-r from-green-400 via-green-500 to-green-600 text-gray-100 flex items-center justify-between px-4 border-t border-green-700 text-xs">
+//         <span>Student Portal</span>
+//         <span>${this.user.institute || ''}</span>
+//       </div>
+
+//       <!-- Modal container -->
+//       <div id="modalRoot" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60"></div>
+//     </div>
+//   `;
+
+//   // Bind simple buttons
+//   document.getElementById('logoutBtn').onclick = () => { this.user = {}; this.showWelcomePage(); };
+//   document.getElementById('goToEditorBtn').onclick = () => { this.showEditor(); this.showToast('🧑‍💻 Opening editor...'); };
+//   document.getElementById('viewDashboardBtn').onclick = () => this.showDashboard();
+//   document.getElementById('refreshHomeBtn').onclick = async () => { await this.fetchStudentStats(); await this.updateHomeStatsAndProfile(); };
+//   document.getElementById('subjectSelect').addEventListener('change', async (e) => {
+//     this.selectedSubject = e.target.value;
+//     await this.updateHomeStatsAndProfile();
+//     await this.updateHomeStats();
+//   });
+
+//   // Attach title-button listeners (reliable)
+//   document.querySelectorAll('.home-title-btn').forEach(btn => {
+//     btn.addEventListener('click', (ev) => {
+//       const type = ev.currentTarget.dataset.type;
+//       // call modal opener (preserves this)
+//       this.showTaskModal(type);
+//     });
+//   });
+
+//   // initial data
+//   await this.updateHomeStatsAndProfile();
+//   await this.updateHomeStats();
+// }
+
+// -------------------- showHomePage --------------------
+async showHomePage() {
+  const app = document.getElementById('app');
+  app.classList.remove('hidden');
+
+  const res = await fetch(`${this.base_server}/get-approved-subjects?college=${this.user.institute}&student_id=${this.user.id}`);
+  const data = await res.json();
+
+  this.user.subjects = data.approved_subjects || [];
+  console.log("user subjects:", this.user.subjects);
+
+  const subjects = this.user.subjects.map(s => s.subject) || [];
+  this.selectedSubject = subjects[0] || null;
+
+ const firstSubjectObj = this.user.subjects.find(s => s.subject === this.selectedSubject);
+this.selectedFaculty = firstSubjectObj?.faculty || null;
+
+  const stats = this.studentStats?.[this.selectedSubject] || {
+    assignments: { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+    practicals:  { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+    quizzes:     { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+    classes: 0,
+  };
+
+  app.innerHTML = `
+    <div class="h-full w-full flex flex-col bg-[#1e1e1e] text-gray-100 font-sans">
+      <!-- Topbar -->
+      <div id="topbar" class="flex items-center justify-between h-10 px-4 bg-[#2d2d2d] border-b border-[#3c3c3c]">
+        <div class="flex items-center space-x-3">
+          <span class="text-lg font-bold text-teal-400">Kodin</span>
+          <span class="text-gray-400 text-sm">Student Home</span>
+        </div>
+        <div class="flex items-center space-x-3">
+          <span class="text-sm text-gray-300">${this.user.name || 'Student'}</span>
+          <button id="logoutBtn" class="text-xs bg-[#3c3c3c] hover:bg-[#555] px-3 py-1 rounded text-gray-200">Logout</button>
+        </div>
+      </div>
+
+      <!-- Home Page Content -->
+      <div class="flex-1 overflow-y-auto p-6">
+        <h1 class="text-2xl font-bold mb-5 text-white">Welcome, ${this.user.name || 'Student'} 👋</h1>
+
+        <!-- Combined Info + Performance -->
+        <div class="bg-[#2d2d2d] rounded-lg p-5 mb-6 border border-[#3c3c3c] shadow">
+          <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+            <div class="p-2 bg-[#1e1e1e] rounded">
+              <p class="text-gray-400 text-xs">Institute</p>
+              <p class="text-white text-sm font-semibold">${this.user.institute || 'N/A'}</p>
+            </div>
+            <div class="p-2 bg-[#1e1e1e] rounded">
+              <p class="text-gray-400 text-xs">Student ID</p>
+              <p class="text-white text-sm font-semibold">${this.user.id}</p>
+            </div>
+            <div class="p-2 bg-[#1e1e1e] rounded">
+              <p class="text-gray-400 text-xs">Rank</p>
+              <p id="homeRank" class="text-white text-sm font-semibold">--</p>
+            </div>
+            <div class="p-2 bg-[#1e1e1e] rounded">
+              <p class="text-gray-400 text-xs">Points</p>
+              <p id="homePoints" class="text-white text-sm font-semibold">--</p>
+            </div>
+            <div class="p-2 bg-[#1e1e1e] rounded">
+              <p class="text-gray-400 text-xs">Lines of Code</p>
+              <p id="homeLOC" class="text-white text-sm font-semibold">--</p>
+            </div>
+            <div class="p-2 bg-[#1e1e1e] rounded">
+              <p class="text-gray-400 text-xs">Unique Subs</p>
+              <p id="homeUnique" class="text-white text-sm font-semibold">--</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subject Selector -->
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="text-lg font-semibold text-white">Your Progress</h2>
+          <div class="flex items-center space-x-2">
+            <label for="subjectSelect" class="text-sm text-gray-300">Subject:</label>
+            <select id="subjectSelect" class="bg-[#2d2d2d] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-teal-500">
+              ${subjects.map(sub => `<option value="${sub}" ${sub === this.selectedSubject ? 'selected' : ''}>${sub}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <!-- Quick Stats Grid -->
+        <div id="homeStatsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          ${this.homeCard('🧾','Assignments', stats.assignments.submitted, stats.assignments.pending, 'assignments')}
+          ${this.homeCard('🧪','Practicals',  stats.practicals.submitted,  stats.practicals.pending,  'practicals')}
+          ${this.homeCard('🧠','Quizzes',     stats.quizzes.submitted,     stats.quizzes.pending,     'quizzes')}
+          ${this.homeCard('🏫','Classes Joined', stats.classes, 0, 'classes')}
+        </div>
+
+        <!-- Buttons Row -->
+        <div class="flex flex-wrap justify-center gap-4">
+          <button id="goToEditorBtn" class="px-6 py-2 rounded-full bg-gradient-to-r from-teal-500 to-teal-600 text-base font-semibold text-black shadow">Go to Editor</button>
+          <button id="viewDashboardBtn" class="px-6 py-2 rounded-full bg-gray-700 hover:bg-gray-600 text-base font-semibold text-white">View Dashboard</button>
+          <button id="refreshHomeBtn" class="px-6 py-2 rounded-full bg-[#3c3c3c] hover:bg-[#555] text-base font-semibold text-white">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Bottom Bar -->
+      <div id="bottombar" class="h-6 bg-gradient-to-r from-green-400 via-green-500 to-green-600 text-gray-100 flex items-center justify-between px-4 border-t border-green-700 text-xs">
+        <span>Student Portal</span>
+        <span>${this.user.institute || ''}</span>
+      </div>
+
+      <!-- Modal container -->
+      <div id="modalRoot" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60"></div>
+    </div>
+  `;
+
+  // -------------------- Bind buttons --------------------
+  document.getElementById('logoutBtn').onclick = () => { this.user = {}; this.showWelcomePage(); };
+  document.getElementById('goToEditorBtn').onclick = () => { this.showEditor(); this.showToast('🧑‍💻 Opening editor...'); };
+  document.getElementById('viewDashboardBtn').onclick = () => this.showDashboard();
+  document.getElementById('refreshHomeBtn').onclick = async () => { await this.fetchStudentStats(); await this.updateHomeStatsAndProfile(); };
+  
+  document.getElementById('subjectSelect').addEventListener('change', async (e) => {
+    this.selectedSubject = e.target.value;
+    const subjObj = this.user.subjects.find(s => s.subject === this.selectedSubject);
+    this.selectedFaculty = subjObj?.faculty || null;
+    // await this.updateHomeStatsAndProfile();
+    await this.updateHomeStats();
+    this.attachHomeCardListeners(); // reattach after update
+  });
+
+  // Attach home-card title buttons
+  this.attachHomeCardListeners();
+
+  // initial data
+  await this.updateHomeStatsAndProfile();
+  await this.updateHomeStats();
+}
+
+// -------------------- Attach home-card title listeners --------------------
+attachHomeCardListeners() {
+  document.querySelectorAll('.home-title-btn').forEach(btn => {
+    btn.onclick = (ev) => {
+      const type = ev.currentTarget.dataset.type;
+      this.showTaskModal(type);
+    };
+  });
+}
+
+
+// -------------------- homeCard --------------------
+homeCard(icon, title, submitted, pending, type) {
+  // title rendered as a button with data-type so it's always clickable
+  const pendingLine = (pending !== undefined && type !== 'classes') ? `<p class="text-sm text-gray-400 mt-1">Pending: <span class="text-red-400 font-bold">${pending}</span></p>` : '';
+  const submittedLine = (type !== 'classes') ? `<p class="text-sm text-gray-400">Submitted: <span class="text-teal-400 font-bold">${submitted}</span></p>` : `<p class="text-sm text-gray-400">Count: <span class="text-teal-400 font-bold">${submitted}</span></p>`;
+
+  return `
+    <div class="bg-[#2d2d2d] p-5 rounded-xl shadow border border-[#3c3c3c]">
+      <div class="text-3xl mb-2">${icon}</div>
+      <div class="mb-2">
+        <button class="home-title-btn text-left w-full text-white font-semibold text-lg" data-type="${type}" type="button">
+          ${title}
+        </button>
+      </div>
+      ${submittedLine}
+      ${pendingLine}
+    </div>
+  `;
+}
+
+
+showTaskModal(type) {
+  const modalRoot = document.getElementById("modalRoot");
+  const subject = this.selectedSubject;
+
+  // safe access with default empty object & lists
+  const stats = this.studentStats?.[subject]?.[type] || {};
+  const submitted = stats.list?.submitted || [];
+  const pending   = stats.list?.pending   || [];
+
+  modalRoot.innerHTML = `
+    <div class="bg-[#2d2d2d] w-[92%] max-w-2xl rounded-xl p-6 relative border border-[#3c3c3c]">
+      <h3 class="text-xl font-bold text-white mb-2">
+        ${type.charAt(0).toUpperCase() + type.slice(1)} — ${subject}
+      </h3>
+
+      <div class="absolute top-4 right-4">
+        <select id="modalFilter" class="bg-[#1e1e1e] text-gray-200 border border-[#3c3c3c] rounded px-3 py-1">
+          <option value="submitted">Submitted</option>
+          <option value="pending">Pending</option>
+        </select>
+      </div>
+
+      <div id="modalTaskList" class="mt-6 max-h-64 overflow-y-auto space-y-2 text-sm text-gray-300"></div>
+
+      <div class="mt-4 flex justify-end gap-2">
+        <button id="modalClose" class="px-4 py-1 rounded bg-[#3c3c3c] hover:bg-[#555] text-white">Close</button>
+      </div>
+    </div>
+  `;
+
+  modalRoot.classList.remove("hidden");
+
+  document.getElementById("modalClose").onclick = () => {
+    modalRoot.classList.add("hidden");
+    modalRoot.innerHTML = "";
+  };
+
+  const render = (mode) => {
+    const container = document.getElementById("modalTaskList");
+    const list = mode === "submitted" ? submitted : pending;
+
+    if (!list.length) {
+      container.innerHTML = `<p class="text-gray-400">No ${mode} ${type} found.</p>`;
+      return;
+    }
+
+    container.innerHTML = list
+      .map((item) => {
+        if (typeof item === "string")
+          return `<div class="p-2 bg-[#1e1e1e] rounded border border-[#3c3c3c]">${item}</div>`;
+
+        return `
+          <div class="p-2 bg-[#1e1e1e] rounded border border-[#3c3c3c]">
+            <div class="font-semibold">${item.class_id}</div>
+            <div class="text-xs text-gray-400">${item.pdf_name || ""}</div>
+          </div>
+        `;
+      })
+      .join("");
+  };
+
+  const f = document.getElementById("modalFilter");
+  f.onchange = () => render(f.value);
+  render("submitted");
+}
+
+
+
+async updateHomeStatsAndProfile() {
+  try {
+    const response = await fetch(`${this.base_server}/get-student-stats`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        institute: this.user.institute,
+        role: this.user.role,
+        student_id: this.user.id,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      console.error("Error fetching home stats:", data.error);
+      return;
+    }
+
+    // Update home page mini dashboard
+    const rankElem = document.getElementById("homeRank");
+    const pointsElem = document.getElementById("homePoints");
+    const locElem = document.getElementById("homeLOC");
+    const uniqueElem = document.getElementById("homeUnique");
+
+    if (rankElem) rankElem.textContent = data.rank ?? "N/A";
+    if (pointsElem) pointsElem.textContent = data.points ?? 0;
+    if (locElem) locElem.textContent = data.total_lines ?? 0;
+    if (uniqueElem) uniqueElem.textContent = data.unique_submissions ?? 0;
+  } catch (error) {
+    console.error("Failed to update home stats:", error);
+  }
+}
+
+async updateHomeStats() {
+  const subject = this.selectedSubject;
+  const college = this.user.institute;
+  const faculty = this.selectedFaculty;
+  const studentID = this.user.id;
+
+  // ------- DEFAULTS -------
+  const defaultStats = { submitted: 0, pending: 0, list: { submitted: [], pending: [] } };
+  let data = {
+    assignments: defaultStats,
+    practicals: defaultStats,
+    quizzes: defaultStats,
+    classes: 0
+  };
+
+  // ------- CALL BACKEND -------
+  try {
+    const res = await fetch(
+      `${this.base_server}/get-tasks?college=${college}&faculty=${faculty}&subject=${subject}&student_id=${studentID}`
+    );
+
+    const result = await res.json();
+
+    // Make sure each type has both numbers and list
+    data.assignments = {
+      submitted: result.assignments?.submitted || 0,
+      pending: result.assignments?.pending || 0,
+      list: result.assignments?.submitted_list && result.assignments?.pending_list
+            ? { submitted: result.assignments.submitted_list, pending: result.assignments.pending_list }
+            : { submitted: [], pending: [] }
+    };
+
+    data.practicals = {
+      submitted: result.practicals?.submitted || 0,
+      pending: result.practicals?.pending || 0,
+      list: result.practicals?.submitted_list && result.practicals?.pending_list
+            ? { submitted: result.practicals.submitted_list, pending: result.practicals.pending_list }
+            : { submitted: [], pending: [] }
+    };
+
+    data.quizzes = {
+      submitted: result.quizzes?.submitted || 0,
+      pending: result.quizzes?.pending || 0,
+      list: result.quizzes?.submitted_list && result.quizzes?.pending_list
+            ? { submitted: result.quizzes.submitted_list, pending: result.quizzes.pending_list }
+            : { submitted: [], pending: [] }
+    };
+
+    data.classes = result.classes || 0;
+
+  } catch (err) {
+    console.error("Failed to fetch tasks:", err);
+  }
+
+  // ------- STORE RESULTS SO MODAL CAN USE -------
+  this.studentStats = this.studentStats || {};
+  this.studentStats[subject] = data;
+
+  // ------- UPDATE HOME GRID -------
+  const grid = document.getElementById("homeStatsGrid");
+  grid.innerHTML = `
+    ${this.homeCard("🧾","Assignments", data.assignments.submitted, data.assignments.pending, "assignments")}
+    ${this.homeCard("🧪","Practicals",  data.practicals.submitted,  data.practicals.pending,  "practicals")}
+    ${this.homeCard("🧠","Quizzes",     data.quizzes.submitted,     data.quizzes.pending,     "quizzes")}
+    ${this.homeCard("🏫","Classes Joined", data.classes, 0, "classes")}
+  `;
+
+  // Reattach listeners after updating grid
+  this.attachHomeCardListeners();
+}
+
+
+// async updateHomeStats() {
+//   const subject = this.selectedSubject;
+//   const college = this.user.institute;
+//   const faculty = this.selectedFaculty;
+//   const studentID = this.user.id;
+
+//   // ------- DEFAULTS -------
+//   const defaultStats = { submitted: 0, pending: 0, list: { submitted: [], pending: [] } };
+//   let data = {
+//     assignments: defaultStats,
+//     practicals: defaultStats,
+//     quizzes: defaultStats,
+//     classes: 0
+//   };
+
+//   // ------- CALL BACKEND -------
+//   try {
+//     const res = await fetch(
+//       `${this.base_server}/get-tasks?college=${college}&faculty=${faculty}&subject=${subject}&student_id=${studentID}`
+//     );
+
+//     const result = await res.json();
+
+//     // Ensure all types exist
+//     data.assignments = result.assignments || defaultStats;
+//     data.practicals  = result.practicals  || defaultStats;
+//     data.quizzes     = result.quizzes     || defaultStats;
+//     data.classes     = result.classes     || 0;
+//   } catch (err) {
+//     console.error("Failed to fetch tasks:", err);
+//   }
+
+//   // ------- STORE RESULTS SO MODAL CAN USE -------
+//   this.studentStats = this.studentStats || {};
+//   this.studentStats[subject] = data;
+
+//   // ------- UPDATE HOME GRID -------
+//   const grid = document.getElementById("homeStatsGrid");
+//   grid.innerHTML = `
+//     ${this.homeCard("🧾","Assignments", data.assignments.submitted, data.assignments.pending, "assignments")}
+//     ${this.homeCard("🧪","Practicals",  data.practicals.submitted,  data.practicals.pending,  "practicals")}
+//     ${this.homeCard("🧠","Quizzes",     data.quizzes.submitted,     data.quizzes.pending,     "quizzes")}
+//     ${this.homeCard("🏫","Classes Joined", data.classes, 0, "classes")}
+//   `;
+// }
+
+
+
+// // -------------------- updateHomeStats --------------------
+// async updateHomeStats() {
+//   const subject = this.selectedSubject;
+//   const college = this.user.institute;
+//   const faculty = this.selectedFaculty;
+//   const studentID = this.user.id;
+
+//   // ------- CALL BACKEND -------
+//   let practicals = {
+//     submitted: 0,
+//     pending: 0,
+//     list: { submitted: [], pending: [] }
+//   };
+
+//   try {
+//     const res = await fetch(
+//       `${this.base_server}/get-tasks?college=${college}&faculty=${faculty}&subject=${subject}&student_id=${studentID}`
+//     );
+
+//     const data = await res.json();
+
+//     if (data.assignments) {
+//       practicals = {
+//         submitted: data.assignments.submitted,
+//         pending: data.assignments.pending,
+//         list: {
+//           submitted: data.assignments.submitted_list,
+//           pending: data.assignments.pending_list
+//         }
+//       };
+//     }
+//   } catch (err) {
+//     console.error("Failed to fetch tasks:", err);
+//   }
+
+//   // ------- DEFAULTS FOR OTHER CARDS -------
+//   const assignments = { submitted: 0, pending: 0 };
+//   const quizzes = { submitted: 0, pending: 0 };
+//   const classes = 0;
+
+//   // ------- STORE RESULTS SO MODAL CAN USE -------
+//   this.studentStats = this.studentStats || {};
+//   this.studentStats[subject] = {
+//   assignments: data.assignments || { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//   practicals: data.practicals || { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//   quizzes: data.quizzes || { submitted: 0, pending: 0, list: { submitted: [], pending: [] } },
+//   classes: data.classes || 0
+// };
+
+
+//   // ------- UPDATE HOME GRID -------
+//   const grid = document.getElementById("homeStatsGrid");
+
+//   grid.innerHTML = `
+//     ${this.homeCard("🧾","Assignments", assignments.submitted, assignments.pending, "assignments")}
+//     ${this.homeCard("🧪","Practicals", practicals.submitted, practicals.pending, "practicals")}
+//     ${this.homeCard("🧠","Quizzes", quizzes.submitted, quizzes.pending, "quizzes")}
+//     ${this.homeCard("🏫","Classes Joined", classes, 0, "classes")}
+//   `;
+// }
+
+
+// // helper to update stats grid when subject changes
+// async updateHomeStats() {
+//   const grid = document.getElementById('homeStatsGrid');
+//   const subject = this.selectedSubject;
+
+//   // simulate fetching data
+//   const stats = this.studentStats?.[subject] || {
+//     assignments: { submitted: 0, pending: 0 },
+//     practicals: { submitted: 0, pending: 0 },
+//     quizzes: { submitted: 0, pending: 0 },
+//     classes: 0,
+//   };
+
+//   grid.innerHTML = `
+//     ${this.homeCard('🧾', 'Assignments', stats.assignments.submitted, stats.assignments.pending)}
+//     ${this.homeCard('🧪', 'Practicals', stats.practicals.submitted, stats.practicals.pending)}
+//     ${this.homeCard('🧠', 'Quizzes', stats.quizzes.submitted, stats.quizzes.pending)}
+//     ${this.homeCard('🏫', 'Classes Joined', stats.classes, 0)}
+//   `;
+// }
+
+// // modified homeCard to show submitted/pending
+// homeCard(icon, title, submitted, pending) {
+//   return `
+//     <div class="bg-[#2d2d2d] rounded-lg p-5 text-center border border-[#3c3c3c] shadow-md hover:shadow-lg transition-shadow">
+//       <div class="text-3xl mb-2">${icon}</div>
+//       <h3 class="text-lg font-semibold text-[#61dafb]">${title}</h3>
+//       <p class="text-gray-300 text-sm mt-2">Submitted: <span class="text-green-400 font-bold">${submitted}</span></p>
+//       <p class="text-gray-300 text-sm">Pending: <span class="text-red-400 font-bold">${pending}</span></p>
+//     </div>
+//   `;
+// }
+
+
+
 
 
 
