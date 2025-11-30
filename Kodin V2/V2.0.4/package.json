@@ -1,0 +1,85 @@
+{
+  "name": "kodin",
+  "private": true,
+  "version": "2.0.4",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite --config vite.config.mjs",
+    "build": "vite build --config vite.config.mjs",
+    "preview": "vite preview --config vite.config.mjs",
+    "start": "cross-env NODE_ENV=development npx electron  .",
+    "serve": "cross-env NODE_ENV=production npx electron  .",
+    "rebuild-nodepty": "electron-rebuild -f -w @lydell/node-pty --version 38.2.2",
+    "rebuild-iohook": "electron-rebuild -f -w @tkomde/iohook --version 38.2.2",
+    "rebuild": "npm run rebuild-nodepty && npm run rebuild-iohook",
+    "dist": "npm run build && npm run rebuild && electron-builder"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.12",
+    "@tailwindcss/postcss": "^4.1.12",
+    "assert-plus": "^1.0.0",
+    "autoprefixer": "^10.4.21",
+    "cross-env": "^10.0.0",
+    "electron": "^38.2.2",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9",
+    "http-signature": "^1.4.0",
+    "nugget": "^2.2.0",
+    "postcss": "^8.5.6",
+    "request": "^2.88.2",
+    "tailwindcss": "^4.1.12",
+    "vite": "^5.4.10",
+    "vite-plugin-monaco-editor": "^1.1.0"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.1.0",
+    "@tkomde/iohook": "^1.1.6",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "firebase": "^12.1.0",
+    "highlight.js": "^11.11.1",
+    "keytar": "^7.9.0",
+    "marked": "^11.2.0",
+    "monaco-editor": "^0.52.2",
+    "split.js": "^1.6.5"
+  },
+  "build": {
+    "appId": "com.getkodin.app",
+    "productName": "Kodin",
+    "copyright": "© 2025 Raghvendra",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**",
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/",
+        "to": "./",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "scripts/",
+        "to": "./",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
